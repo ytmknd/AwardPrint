@@ -145,7 +145,7 @@ describe("PDF output", () => {
   it("renders vertical writing and print offset without changing paper size", async () => {
     const project = sampleProject();
     project.objects = [
-      { ...project.objects[0], text: "表彰状。", vertical: true, x: 20, y: 20 },
+      { ...project.objects[0], text: "「表彰状。」", vertical: true, x: 20, y: 20 },
     ];
     project.offsetX = 1.5;
     project.offsetY = -0.5;

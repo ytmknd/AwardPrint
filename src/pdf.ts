@@ -122,11 +122,17 @@ function drawVertical(
   }
   columns.forEach((chars, ci) =>
     chars.forEach((char, ri) => {
-      const glyph = "、。".includes(char)
-        ? char === "、"
-          ? "︑"
-          : "︒"
-        : char;
+      const verticalForms: Record<string, string> = {
+        "、": "︑",
+        "。": "︒",
+        "「": "﹁",
+        "」": "﹂",
+        "『": "﹃",
+        "』": "﹄",
+        "（": "︵",
+        "）": "︶",
+      };
+      const glyph = verticalForms[char] ?? char;
       // Draw each glyph upright; rotate only glyphs that are conventionally sideways in vertical text.
       const sideways = /[A-Za-z0-9!?()\[\]]/.test(glyph);
       page.drawText(glyph, {

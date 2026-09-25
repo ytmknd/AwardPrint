@@ -1025,6 +1025,13 @@ export default function App() {
                 )}
                 {project.objects.map((o) => {
                   const text = preview ? mergeText(o.text, currentRow) : o.text;
+                  const maxChars = Math.max(
+                    1,
+                    Math.floor((o.width * 2.835) / (o.fontSize * 0.9)),
+                  );
+                  const lineCount = text
+                    .split("\n")
+                    .reduce((sum, line) => sum + Math.max(1, Math.ceil(line.length / maxChars)), 0);
                   const overflow = o.vertical
                     ? (text.length * o.fontSize) / 2.835 >
                       o.height *
@@ -1034,8 +1041,7 @@ export default function App() {
                             (o.width * 2.835) / (o.fontSize * o.lineHeight),
                           ),
                         )
-                    : (text.split("\n").length * o.fontSize * o.lineHeight) /
-                        2.835 >
+                    : (lineCount * o.fontSize * o.lineHeight) / 2.835 >
                       o.height + 3;
                   return (
                     <div
