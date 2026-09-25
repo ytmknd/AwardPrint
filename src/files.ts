@@ -1,6 +1,5 @@
 import ExcelJS from "exceljs";
 import Papa from "papaparse";
-import { openDB } from "idb";
 import type { DataRow, FontAsset, Project } from "./model";
 
 export async function fileToBase64(file: Blob): Promise<string> {
@@ -103,11 +102,27 @@ export function sheetToRows(
   return { columns, rows };
 }
 export async function readFont(file: File): Promise<FontAsset> {
-  const type = file.name.toLowerCase().endsWith(".otf") ? "otf" : "ttf";
   if (!/\.(ttf|otf)$/i.test(file.name))
     throw new Error("TTFまたはOTFファイルを選択してください");
-  const data = await fileToBase64(file);
+  return readFontBlob(file, file.name.replace(/\.(ttf|otf)$/i, ""));
+}
+export async function readFontBlob(
+  blob: Blob,
+  name: string,
+): Promise<FontAsset> {
+  const data = await fileToBase64(blob);
   const bytes = base64ToBytes(data);
+  const signature = String.fromCharCode(...bytes.slice(0, 4));
+  const type =
+    signature === "OTTO"
+      ? "otf"
+      : signature === "\u0000\u0001\u0000\u0000" || signature === "true"
+        ? "ttf"
+        : null;
+  if (!type)
+    throw new Error(
+      "このPCフォントの形式はPDF埋め込みに対応していません（TTF/OTFを選択してください）",
+    );
   // OS/2 fsType: 0 means installable embedding. Restricted License Embedding has bit 1.
   let embeddingAllowed = true;
   const view = new DataView(bytes.buffer);
@@ -124,7 +139,7 @@ export async function readFont(file: File): Promise<FontAsset> {
   }
   return {
     id: crypto.randomUUID(),
-    name: file.name.replace(/\.(ttf|otf)$/i, ""),
+    name,
     data,
     type,
     embeddingAllowed,
@@ -142,38 +157,41 @@ export function download(
   a.click();
   setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
-const db = () =>
-  openDB("awardprint", 1, {
-    upgrade(database) {
-      database.createObjectStore("projects");
-    },
-  });
-export async function saveProject(project: Project): Promise<void> {
-  await (await db()).put("projects", project, "current");
-}
-export async function loadProject(): Promise<Project | undefined> {
-  return (await db()).get("projects", "current");
-}
-export function exportProject(project: Project): void {
+export function projectJson(project: Project): string {
   const saved = project.includePersonalData
     ? project
     : { ...project, rows: [] };
+  return JSON.stringify(saved, null, 2);
+}
+export function exportProject(project: Project): void {
   download(
-    JSON.stringify(saved),
-    `${project.name || "AwardPrint"}.awardprint`,
+    projectJson(project),
+    `${(project.name || "AwardPrint").replace(/[\\/:*?"<>|]/g, "_")}.json`,
     "application/json",
   );
 }
 export async function importProject(file: File): Promise<Project> {
-  const data: unknown = JSON.parse(await file.text());
+  return parseProjectJson(await file.text());
+}
+export function parseProjectJson(json: string): Project {
+  const data: unknown = JSON.parse(json);
   if (
     !data ||
     typeof data !== "object" ||
     !("version" in data) ||
     data.version !== 1 ||
     !("paper" in data) ||
-    !("objects" in data)
+    !data.paper ||
+    typeof data.paper !== "object" ||
+    !("width" in data.paper) ||
+    typeof data.paper.width !== "number" ||
+    !("height" in data.paper) ||
+    typeof data.paper.height !== "number" ||
+    !("objects" in data) ||
+    !Array.isArray(data.objects) ||
+    !("fonts" in data) ||
+    !Array.isArray(data.fonts)
   )
-    throw new Error("対応していないプロジェクト形式です");
+    throw new Error("対応していないJSONプロジェクト形式です");
   return data as Project;
 }

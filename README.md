@@ -1,62 +1,83 @@
 # AwardPrint
 
-賞状・表彰状・認定証の差し込み印刷を、ブラウザ内だけで作成するデスクトップ向けWebアプリです。PDFの賞状デザインを下絵として表示し、CSVまたはExcelの受賞者データを文字領域に差し込みます。通常の印刷では**下絵を含まない文字だけのPDF**を生成します。アカウント、APIキー、バックエンドは不要です。読み込んだ個人情報をアプリから外部へ送信しません。
+[Open AwardPrint on GitHub Pages](https://ytmknd.github.io/AwardPrint/) · [Source repository](https://github.com/ytmknd/AwardPrint)
 
-## 起動
+AwardPrint is a browser-based mail merge application for certificates, awards, and recognition documents. Place text over a PDF template, import recipients from CSV or Excel, preview each result, and generate print-ready PDFs. **The normal print PDF contains only the added text; it never includes the PDF template.** This lets you print onto certificate paper that already has a border or design.
 
-Node.js 22以上を推奨します。
+The app runs entirely in the browser. It requires no account, API key, or backend, and it does not upload imported personal information to an application server.
+
+## Run locally
+
+Node.js 22 or later is recommended.
 
 ```sh
 npm install
 npm run dev
 ```
 
-表示されたローカルURLをWindows 11のChromeまたはEdgeで開きます。本番用の静的ファイルは `npm run build` で `dist/` に生成します。`npm run preview` で確認できます。
+Open the local URL shown by Vite in Chrome or Edge on Windows 11. To build and preview the static production site:
+
+```sh
+npm run build
+npm run preview
+```
+
+Run the tests with:
 
 ```sh
 npm test
+npx playwright install chromium # first time only
 npm run test:e2e
 ```
 
-Playwrightの初回実行時には `npx playwright install chromium` が必要です。
+## How to use
 
-## 使い方
+1. The app opens with an A4 portrait sample certificate and three sample recipients. Choose **新規** (New) to start with an empty layout.
+2. Choose **用紙設定** (Paper settings) to select A3, A4, A5, JIS B4, JIS B5, postcard, or a custom size in millimetres. Set orientation and printer X/Y offsets there.
+3. Choose **PDF下絵** (PDF template), or drop a PDF onto the editor. Select the template page and adjust its visibility and opacity. The app warns when the PDF size differs from the paper size.
+4. Choose **CSV / Excel** to import a `.csv` or `.xlsx` file. CSV supports UTF-8 and Shift_JIS/Windows-31J. Excel imports support sheet selection, header-row selection, and date formatting.
+5. Click or drag a column name from the left panel onto the page. Edit its text and placement in the right panel. A text box can combine fixed text and fields, for example `{氏名}　殿`. Hold Shift while clicking to select multiple objects. Arrow keys move a selection by 0.1 mm; Shift + arrow keys move it by 1 mm.
+6. Choose **プレビュー** (Preview) to step through recipients. The eye button switches the template display on or off.
+7. Choose **印刷** (Print) to generate a text-only PDF and open the browser's print dialog. You can print the current record, all records, a range, or rows selected in the data table. **PDF出力** (PDF export) offers a separate confirmation PDF that includes the template.
+8. Choose **レイアウト保存** (Save layout) to download a `.json` project file and **レイアウトを開く** (Open layout) to restore it. The app can also import older `.awardprint` files. Recipient rows are excluded from the saved file by default; you can opt to include them. Project data is not saved to browser storage.
 
-1. 起動時にA4横向きのサンプル賞状と3件の受賞者データが入っています。「新規」で空のプロジェクトを作れます。「?」からサンプルCSVを保存できます。
-2. 「用紙設定」でA3、A4、A5、JIS B4、JIS B5、はがき、またはmm指定の用紙を選びます。縦・横向きと印刷オフセットも設定できます。
-3. 「PDF下絵」でPDFを選ぶか、編集領域にPDFをドロップします。ページ番号、透明度、表示を調整できます。下絵のサイズが設定用紙と違う場合は警告を表示し、PDFサイズを用紙に適用できます。
-4. 「CSV / Excel」で `.csv` または `.xlsx` を選びます。CSVはUTF-8とShift_JISを自動判別し、文字化けした場合はデータ一覧で明示的に切り替えられます。Excelはシート、ヘッダー行、日付表示を選べます。
-5. 左の列名をクリックするか用紙にドラッグし、文字を配置します。右のパネルで `{氏名}　殿` のような混合文字列、X/Y座標、サイズ、フォント、文字色、縦書きなどを編集します。複数選択はShift+クリック、位置の微調整は矢印キーで0.1mm、Shift+矢印で1mmです。
-6. 「プレビュー」でレコードを切り替えます。目のボタンで下絵あり・なしを比較できます。データ一覧の行をクリックしても切り替わります。
-7. 「印刷」では、現在のレコード、すべて、指定範囲、またはデータ一覧で選んだ行から文字だけのPDFを生成し、ブラウザの印刷ダイアログを開きます。「PDF出力」では文字だけの印刷用PDFと、下絵を含む確認用PDFを明確に選べます。
-8. 「保存」でブラウザのIndexedDBに保存します。「開く」から `.awardprint` ファイルの書き出し・読み込みもできます。差し込みデータを保存に含めるか選択できます。初期設定では個人情報を除外します。
+The **?** button offers a downloadable sample CSV. You can try the sample layout without importing a PDF.
 
-## 印刷時の注意
+## Installed fonts
 
-- 用紙サイズを確認してください。
-- 印刷倍率は「実際のサイズ」または100%にしてください。「用紙に合わせる」は使用しないでください。
-- プリンターの印刷可能領域を確認してください。ブラウザからプリンターや給紙トレイの自動選択、印刷ダイアログの省略はできません。
-- 位置確認用のテスト印刷は普通紙を使用してください。用紙設定でX/Yオフセットを調整できます。
-- 印刷用PDFは下絵を一切含みません。確認用PDFは下絵を含むため、賞状用紙への重ね刷りには使わないでください。
+The bundled Noto Serif CJK JP and Noto Sans CJK JP fonts support Japanese text in the editor and are embedded in exported PDFs. Select a text object, then choose **PCにインストール済みのフォントから選ぶ** to list and search every font available through the browser's Local Font Access API. When a font provides a Japanese name in its font metadata, the picker displays and searches that name alongside its other names. Chrome or Edge may ask for permission to access installed fonts. You can also load a TTF or OTF file directly.
 
-## 技術構成と座標
+Selected custom fonts are included in the project JSON and embedded in output PDFs. Fonts whose OS/2 metadata restricts embedding are rejected. The bundled fonts are distributed under the [SIL Open Font License 1.1 (Serif)](public/fonts/OFL-Serif.txt) and [SIL Open Font License 1.1 (Sans)](public/fonts/OFL-Sans.txt). See the [Local Font Access API documentation](https://developer.mozilla.org/en-US/docs/Web/API/Window/queryLocalFonts) for browser availability and permission requirements.
 
-React、TypeScript、Vite、Tailwind CSS、PDF.js、pdf-lib、@pdf-lib/fontkit、Papa Parse、ExcelJS、IndexedDBを使用します。レイアウトの座標と寸法はすべて用紙左上からのmmで保存します。PDF座標への変換は `1 inch = 25.4 mm = 72 pt` を使い、PDFの左下原点に変換して描画します。画面の拡大率は保存座標に影響しません。
+## Print accurately
 
-標準の明朝・ゴシックにはNoto Serif CJK JPとNoto Sans CJK JPのRegular/Boldを同梱し、PDFにフォントを埋め込みます。フォントは[SIL Open Font License 1.1](public/fonts/OFL-Serif.txt)で配布されています。Sansのライセンスも[同梱](public/fonts/OFL-Sans.txt)しています。利用者のTTF/OTFも読み込めます。フォントのOS/2テーブルで埋め込み制限が指定されている場合は追加を拒否します。
+- Confirm the paper size in both AwardPrint and the printer settings.
+- Print at **Actual size** or **100%**. Do not use **Fit to page**.
+- Check your printer's printable area. Browsers cannot select a printer or paper tray automatically or skip the print dialog.
+- Use ordinary paper for the position-check test print. Adjust the X/Y print offsets in Paper settings if needed.
+- Use the text-only **print PDF** for preprinted certificate paper. The **confirmation PDF** includes the template and is intended for review or sharing.
 
-## `.awardprint` 形式
+Layout coordinates are stored in millimetres from the paper's top-left corner. PDF output converts them using `1 inch = 25.4 mm = 72 pt`; changing the editor zoom does not change print coordinates.
 
-UTF-8のJSONファイルです。ルートの `version: 1` が形式バージョンで、`paper`、`objects`、`background`、`fonts`、`columns`、`rows`、`offsetX/Y`、差し込み設定を保持します。PDF下絵と利用者のフォントはbase64で格納します。`includePersonalData` がfalseのときは `rows` を空にして保存します。読み込みではバージョン1のみを受け付け、将来の破壊的変更ではバージョンを上げて明示的な移行処理を追加します。個人情報を含むプロジェクトファイルの取扱いには注意してください。
+## Project JSON format
 
-## GitHub Pages
+The UTF-8 JSON file has a root `version` value of `1`. It stores `paper`, `objects`, `background`, `fonts`, `columns`, `rows`, print offsets, and merge settings. PDF templates and selected fonts are stored as base64 data. When `includePersonalData` is false, `rows` is saved as an empty array. The importer accepts version 1; incompatible future changes will require a version increment and an explicit migration. Handle files containing recipient data or installed fonts according to your organisation's policies.
 
-`main` ブランチへのpushで `.github/workflows/pages.yml` がテストとビルドを行い、`dist/` をPagesに公開します。リポジトリの **Settings → Pages → Build and deployment → Source** を **GitHub Actions** に設定してください。相対パスでビルドするため、ユーザーサイトとプロジェクトサイトの両方に対応します。
+## GitHub Pages deployment
 
-## 既知の制約
+This repository includes [a GitHub Actions workflow](.github/workflows/pages.yml) that runs the tests, builds `dist/`, and deploys it on pushes to `main`.
 
-- 縦書きPDFは文字ごとに描画します。句読点の縦用字形と英数字の回転に対応しますが、すべての縦組み禁則処理や複雑な組版は未対応です。出力前に確認用PDFで目視確認してください。
-- 編集画面の改行・溢れ警告は簡易判定です。ブラウザとPDFの文字レイアウトエンジンが異なるため、長文の折り返し位置が完全には一致しない場合があります。最終確認は生成PDFで行ってください。
-- 読み込んだ単一のカスタムフォントに太字の字形が含まれない場合、PDFではその太字指定を再現できません。太字フォントを別に読み込んで選択してください。
-- Excelで既に数値化されて失われた学籍番号の先頭ゼロは復元できません。Excelの表示形式が `0000` のようなゼロ埋めの場合は表示文字列として読み取ります。
-- 大きな下絵、フォント、数百ページの出力は端末メモリを多く使います。データ一覧の表は最初の200件だけを表示しますが、PDF出力には全件を使用できます。
+1. Push `main` to `https://github.com/ytmknd/AwardPrint.git`.
+2. In the repository, open **Settings → Pages → Build and deployment** and set **Source** to **GitHub Actions**.
+3. Open the **Actions** tab and wait for **Publish AwardPrint** to finish successfully.
+4. Visit **[https://ytmknd.github.io/AwardPrint/](https://ytmknd.github.io/AwardPrint/)**. Publishing may take a few minutes after deployment.
+
+Vite uses relative asset paths, so the app works under the `/AwardPrint/` project path. The GitHub Pages address above becomes live after the workflow deploys successfully.
+
+## Known limitations
+
+- Vertical PDF text is positioned glyph by glyph. Common vertical punctuation and rotated Latin characters are supported, but full Japanese typesetting rules are not. Inspect the generated PDF before printing.
+- Text overflow warnings in the editor are estimates. Browser and PDF text layout can wrap long lines differently; use the generated PDF for final proofing.
+- A custom font file without a bold face cannot reproduce a bold setting in the PDF. Load and select the font's bold face separately.
+- If Excel has already converted an identifier to a number and discarded leading zeros, AwardPrint cannot recover them. Excel display formats such as `0000` are read as displayed text.
+- Large PDF templates, fonts, and hundreds of output pages can use substantial device memory. The data table displays its first 200 rows, while PDF generation can use all rows.

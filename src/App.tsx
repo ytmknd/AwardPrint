@@ -32,14 +32,19 @@ import {
   exportProject,
   fileToBase64,
   importProject,
-  loadProject,
   readCsv,
   readFont,
+  readFontBlob,
   readWorkbook,
-  saveProject,
   sheetToRows,
   type SheetData,
 } from "./files";
+import {
+  japaneseNameFromSfnt,
+  listLocalFonts,
+  supportsLocalFonts,
+  type LocalFontChoice,
+} from "./localFonts";
 import { createPdf } from "./pdf";
 import {
   makeObject,
@@ -53,7 +58,8 @@ import {
   type TextObject,
 } from "./model";
 
-type Dialog = "paper" | "data" | "print" | "export" | "open" | "help" | null;
+type Dialog =
+  "paper" | "data" | "print" | "export" | "open" | "fonts" | "help" | null;
 type Drag = {
   ids: string[];
   startX: number;
@@ -162,6 +168,16 @@ export default function App() {
     [selectedRows, setSelectedRows] = useState<number[]>([]);
   const [exportBackground, setExportBackground] = useState(false);
   const [clipboard, setClipboard] = useState<TextObject[]>([]);
+  const [localFonts, setLocalFonts] = useState<LocalFontChoice[]>([]);
+  const [fontSearch, setFontSearch] = useState("");
+  const [localFontError, setLocalFontError] = useState("");
+  const [loadingFonts, setLoadingFonts] = useState(false);
+  const [fontNameProgress, setFontNameProgress] = useState({
+    done: 0,
+    total: 0,
+  });
+  const fontQueryId = useRef(0);
+  const japaneseFontNameCache = useRef(new Map<string, string>());
   const [pageWidth, setPageWidth] = useState(1000);
   const pageRef = useRef<HTMLDivElement>(null),
     workspaceRef = useRef<HTMLDivElement>(null),
@@ -257,27 +273,14 @@ export default function App() {
     setFuture(future.slice(1));
     setDirty(true);
   };
-  const save = async () => {
-    await saveProject(
-      project.includePersonalData ? project : { ...project, rows: [] },
-    );
+  const save = () => {
+    exportProject(project);
     setDirty(false);
     setNotice(
       project.includePersonalData
-        ? "プロジェクトをブラウザに保存しました"
-        : "レイアウトを保存しました（個人情報は除外）",
+        ? "差し込みデータを含むJSONを保存しました"
+        : "レイアウトJSONを保存しました（差し込みデータは除外）",
     );
-  };
-  const openSaved = async () => {
-    const saved = await loadProject();
-    if (!saved) return setNotice("保存済みプロジェクトがありません");
-    setProject(saved);
-    setPast([]);
-    setFuture([]);
-    setSelected([]);
-    setRecord(0);
-    setDirty(false);
-    setDialog(null);
   };
   const reset = () => {
     if (dirty && !confirm("未保存の変更があります。新規作成しますか？")) return;
@@ -481,10 +484,101 @@ export default function App() {
         return setNotice(
           "このフォントは埋め込みが制限されているため追加できません",
         );
-      change((p) => ({ ...p, fonts: [...p.fonts, font] }));
+      change((p) => ({
+        ...p,
+        fonts: [...p.fonts, font],
+        objects: p.objects.map((o) =>
+          o.id === selected[0] ? { ...o, fontId: font.id } : o,
+        ),
+      }));
       setNotice(`${font.name} を追加しました`);
     } catch (e) {
       setNotice(String(e));
+    }
+  };
+  const showLocalFonts = async () => {
+    const queryId = ++fontQueryId.current;
+    setDialog("fonts");
+    setLoadingFonts(true);
+    setLocalFontError("");
+    setFontNameProgress({ done: 0, total: 0 });
+    try {
+      const fonts = await listLocalFonts();
+      if (queryId !== fontQueryId.current) return;
+      setLocalFonts(
+        fonts.map((font) => ({
+          font,
+          displayName:
+            japaneseFontNameCache.current.get(font.postscriptName) ||
+            font.fullName,
+        })),
+      );
+      setLoadingFonts(false);
+      setFontNameProgress({ done: 0, total: fonts.length });
+      for (let start = 0; start < fonts.length; start += 4) {
+        const names = await Promise.all(
+          fonts.slice(start, start + 4).map(async (font, offset) => {
+            const index = start + offset;
+            if (/[\u3040-\u30ff\u3400-\u9fff]/u.test(font.fullName))
+              return { index, name: font.fullName };
+            const cached = japaneseFontNameCache.current.get(
+              font.postscriptName,
+            );
+            if (cached) return { index, name: cached };
+            try {
+              const name = await japaneseNameFromSfnt(await font.blob());
+              if (name)
+                japaneseFontNameCache.current.set(font.postscriptName, name);
+              return { index, name };
+            } catch {
+              return { index, name: null };
+            }
+          }),
+        );
+        if (queryId !== fontQueryId.current) return;
+        setLocalFonts((previous) =>
+          previous.map((choice, index) => {
+            const found = names.find((item) => item.index === index);
+            return found?.name
+              ? { ...choice, displayName: found.name }
+              : choice;
+          }),
+        );
+        setFontNameProgress({
+          done: Math.min(start + 4, fonts.length),
+          total: fonts.length,
+        });
+      }
+    } catch (error) {
+      setLocalFontError(error instanceof Error ? error.message : String(error));
+    } finally {
+      if (queryId === fontQueryId.current) setLoadingFonts(false);
+    }
+  };
+  const chooseLocalFont = async (candidate: LocalFontChoice) => {
+    try {
+      setLoadingFonts(true);
+      const asset = await readFontBlob(
+        await candidate.font.blob(),
+        candidate.displayName,
+      );
+      if (!asset.embeddingAllowed)
+        throw new Error(
+          "このPCフォントはPDFへの埋め込みが制限されているため選べません",
+        );
+      change((p) => ({
+        ...p,
+        fonts: [...p.fonts, asset],
+        objects: p.objects.map((o) =>
+          o.id === selected[0] ? { ...o, fontId: asset.id } : o,
+        ),
+      }));
+      setDialog(null);
+      setNotice(`${asset.name} を選択しました。PDFとJSONにも埋め込まれます。`);
+    } catch (error) {
+      setLocalFontError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setLoadingFonts(false);
     }
   };
 
@@ -684,13 +778,16 @@ export default function App() {
             <FilePlus2 />
             新規
           </Button>
-          <Button onClick={() => setDialog("open")} title="プロジェクトを開く">
+          <Button
+            onClick={() => setDialog("open")}
+            title="レイアウトのJSONを開く"
+          >
             <FileInput />
-            開く
+            レイアウトを開く
           </Button>
-          <Button onClick={() => void save()} title="Ctrl+S">
+          <Button onClick={save} title="レイアウトをJSONで保存（Ctrl+S）">
             <Save />
-            保存
+            レイアウト保存
           </Button>
           <span className="toolbar-divider" />
           <Button onClick={() => setDialog("paper")}>
@@ -1031,7 +1128,11 @@ export default function App() {
                   );
                   const lineCount = text
                     .split("\n")
-                    .reduce((sum, line) => sum + Math.max(1, Math.ceil(line.length / maxChars)), 0);
+                    .reduce(
+                      (sum, line) =>
+                        sum + Math.max(1, Math.ceil(line.length / maxChars)),
+                      0,
+                    );
                   const overflow = o.vertical
                     ? (text.length * o.fontSize) / 2.835 >
                       o.height *
@@ -1216,6 +1317,12 @@ export default function App() {
                     onClick={() => fontInput.current?.click()}
                   >
                     ＋ TTF / OTFを追加
+                  </button>
+                  <button
+                    className="text-link"
+                    onClick={() => void showLocalFonts()}
+                  >
+                    ＋ PCにインストール済みのフォントから選ぶ
                   </button>
                   <div className="two-col">
                     <NumberInput
@@ -1412,12 +1519,21 @@ export default function App() {
         hidden
         ref={projectInput}
         type="file"
-        accept=".awardprint"
+        accept=".json,.awardprint,application/json"
         onChange={async (e) => {
           const file = e.target.files?.[0];
           if (file)
             try {
+              if (
+                dirty &&
+                !confirm("未保存の変更があります。JSONを読み込みますか？")
+              )
+                return;
               setProject(await importProject(file));
+              setPast([]);
+              setFuture([]);
+              setSelected([]);
+              setRecord(0);
               setDialog(null);
               setDirty(false);
             } catch (error) {
@@ -1445,8 +1561,10 @@ export default function App() {
                       : dialog === "export"
                         ? "PDF出力"
                         : dialog === "open"
-                          ? "プロジェクトを開く"
-                          : "使い方"}
+                          ? "レイアウトを開く・保存"
+                          : dialog === "fonts"
+                            ? "PCのフォントを選ぶ"
+                            : "使い方"}
               </h2>
               <button onClick={() => setDialog(null)}>×</button>
             </div>
@@ -1897,22 +2015,19 @@ export default function App() {
               {dialog === "open" && (
                 <>
                   <p>
-                    ブラウザに保存したプロジェクト、または .awardprint
-                    ファイルを開きます。
+                    レイアウトをJSONファイルから復元します。以前の .awardprint
+                    ファイルも読み込めます。
                   </p>
                   <div className="dialog-actions">
-                    <Button onClick={() => void openSaved()}>
-                      ブラウザの保存データを開く
-                    </Button>
                     <Button onClick={() => projectInput.current?.click()}>
-                      ファイルを読み込む
+                      レイアウトを開く
                     </Button>
                   </div>
                   <hr />
-                  <p>現在のプロジェクトをファイルとして保存できます。</p>
-                  <Button onClick={() => exportProject(project)}>
+                  <p>現在のレイアウトをJSONファイルに保存します。</p>
+                  <Button onClick={save}>
                     <Download />
-                    .awardprint を書き出す
+                    レイアウト保存
                   </Button>
                   <label className="checkbox-row">
                     <input
@@ -1927,6 +2042,67 @@ export default function App() {
                     />
                     差し込みデータを保存ファイルに含める
                   </label>
+                </>
+              )}
+              {dialog === "fonts" && (
+                <>
+                  <p className="panel-tip">
+                    Chrome・Edgeのアクセス許可後、PCにあるフォントを表示します。選んだフォントはPDFとプロジェクトJSONに埋め込まれます。
+                  </p>
+                  {!supportsLocalFonts() && (
+                    <div className="warning-box">
+                      このブラウザはPCフォント一覧に対応していません。TTF/OTFファイルから追加してください。
+                    </div>
+                  )}
+                  {localFontError && (
+                    <div className="warning-box">{localFontError}</div>
+                  )}
+                  {loadingFonts && <p>フォントを読み込み中…</p>}
+                  <label>
+                    フォントを検索
+                    <input
+                      value={fontSearch}
+                      onChange={(e) => setFontSearch(e.target.value)}
+                      placeholder="例: 游明朝、IPA、Noto"
+                    />
+                  </label>
+                  <p className="panel-tip">
+                    {localFonts.length} 件のフォントをすべて表示します。
+                    {fontNameProgress.total > 0 &&
+                      fontNameProgress.done < fontNameProgress.total &&
+                      ` 日本語名を確認中 ${fontNameProgress.done} / ${fontNameProgress.total} 件`}
+                  </p>
+                  <div className="local-font-list">
+                    {localFonts
+                      .filter((choice) =>
+                        `${choice.displayName} ${choice.font.family} ${choice.font.fullName} ${choice.font.style}`
+                          .toLocaleLowerCase()
+                          .includes(fontSearch.toLocaleLowerCase()),
+                      )
+                      .map((choice) => (
+                        <button
+                          key={choice.font.postscriptName}
+                          disabled={loadingFonts}
+                          onClick={() => void chooseLocalFont(choice)}
+                        >
+                          <strong>{choice.displayName}</strong>
+                          <span>
+                            {choice.font.fullName !== choice.displayName
+                              ? `${choice.font.fullName} · `
+                              : ""}
+                            {choice.font.style}
+                          </span>
+                        </button>
+                      ))}
+                  </div>
+                  <Button
+                    onClick={() => {
+                      setDialog(null);
+                      fontInput.current?.click();
+                    }}
+                  >
+                    TTF / OTFファイルから追加
+                  </Button>
                 </>
               )}
               {dialog === "help" && (

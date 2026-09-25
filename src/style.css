@@ -419,9 +419,13 @@ svg {
   flex: 1;
   min-height: 0;
   padding: 7px 45px 30px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 .ruler-top {
   height: 20px;
+  flex: none;
   margin-left: 20px;
   position: relative;
   border-bottom: 1px solid #cdd7df;
@@ -438,6 +442,7 @@ svg {
 }
 .page-row {
   display: flex;
+  flex: none;
 }
 .ruler-side {
   width: 20px;
@@ -780,6 +785,34 @@ svg {
 }
 .dialog-data {
   width: min(920px, calc(100vw - 60px));
+}
+.dialog-fonts {
+  width: min(600px, calc(100vw - 60px));
+}
+.local-font-list {
+  max-height: 42vh;
+  overflow: auto;
+  border: 1px solid #dce5ec;
+  border-radius: 6px;
+}
+.local-font-list button {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  padding: 9px 12px;
+  border: 0;
+  border-bottom: 1px solid #e9eef2;
+  background: #fff;
+  color: #35485d;
+  text-align: left;
+}
+.local-font-list button:hover {
+  background: #edf7fa;
+}
+.local-font-list span {
+  color: #8495a5;
+  font-size: 11px;
 }
 .dialog-head {
   height: 56px;

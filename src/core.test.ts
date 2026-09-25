@@ -3,7 +3,13 @@ import { readFile } from "node:fs/promises";
 import { PDFArray, PDFDict, PDFDocument, PDFName, PDFRawStream } from "pdf-lib";
 import ExcelJS from "exceljs";
 import { createPdf } from "./pdf";
-import { readCsv, readWorkbook, sheetToRows } from "./files";
+import {
+  parseProjectJson,
+  projectJson,
+  readCsv,
+  readWorkbook,
+  sheetToRows,
+} from "./files";
 import {
   mergeText,
   missingFields,
@@ -47,6 +53,33 @@ describe("paper and merge data", () => {
     const project = sampleProject();
     project.objects[0].text = "{不存在}";
     expect(missingFields(project.objects, project.columns)).toEqual(["不存在"]);
+  });
+  it("opens the sample as a fully placed A4 portrait certificate", () => {
+    const project = sampleProject();
+    expect(project.paper).toMatchObject({
+      preset: "A4",
+      orientation: "portrait",
+      width: 210,
+      height: 297,
+    });
+    expect(
+      project.objects.every(
+        (object) =>
+          object.x >= 0 &&
+          object.y >= 0 &&
+          object.x + object.width <= 210 &&
+          object.y + object.height <= 297,
+      ),
+    ).toBe(true);
+  });
+  it("round trips the layout through JSON and excludes personal data by default", () => {
+    const project = sampleProject();
+    const restored = parseProjectJson(projectJson(project));
+    expect(restored.paper).toEqual(project.paper);
+    expect(restored.objects).toEqual(project.objects);
+    expect(restored.rows).toEqual([]);
+    project.includePersonalData = true;
+    expect(parseProjectJson(projectJson(project)).rows).toEqual(project.rows);
   });
 });
 
@@ -99,6 +132,7 @@ describe("PDF output", () => {
   });
   it("creates exact A4 landscape pages with embedded Japanese text and never includes background in print PDF", async () => {
     const project = sampleProject();
+    project.paper = paperFromPreset("A4", "landscape");
     const background = await PDFDocument.create();
     const page = background.addPage([mmToPt(297), mmToPt(210)]);
     page.drawRectangle({ x: 10, y: 10, width: 100, height: 100 });
@@ -145,15 +179,21 @@ describe("PDF output", () => {
   it("renders vertical writing and print offset without changing paper size", async () => {
     const project = sampleProject();
     project.objects = [
-      { ...project.objects[0], text: "「表彰状。」", vertical: true, x: 20, y: 20 },
+      {
+        ...project.objects[0],
+        text: "「表彰状。」",
+        vertical: true,
+        x: 20,
+        y: 20,
+      },
     ];
     project.offsetX = 1.5;
     project.offsetY = -0.5;
     const bytes = await createPdf(project, [0], false);
     const pdf = await PDFDocument.load(bytes);
     expect(pdf.getPage(0).getSize()).toEqual({
-      width: mmToPt(297),
-      height: mmToPt(210),
+      width: mmToPt(210),
+      height: mmToPt(297),
     });
     expect(bytes.length).toBeGreaterThan(1000);
   }, 120_000);
