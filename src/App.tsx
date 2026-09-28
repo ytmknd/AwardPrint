@@ -640,9 +640,10 @@ export default function App() {
     }));
   };
   const endDrag = () => {
-    if (!dragRef.current) return;
+    const d = dragRef.current;
+    if (!d) return;
     const changed = project.objects.some((o) => {
-      const old = dragRef.current!.original.find((x) => x.id === o.id);
+      const old = d.original.find((x) => x.id === o.id);
       return (
         old &&
         (o.x !== old.x ||
@@ -657,7 +658,7 @@ export default function App() {
         {
           ...project,
           objects: project.objects.map(
-            (o) => dragRef.current!.original.find((x) => x.id === o.id) ?? o,
+            (o) => d.original.find((x) => x.id === o.id) ?? o,
           ),
         },
       ]);
