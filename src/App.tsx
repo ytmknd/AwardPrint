@@ -806,10 +806,17 @@ export default function App() {
     };
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
   };
-  // 用紙の空白部分からのドラッグで範囲選択（Shift を押していれば追加選択）
-  const startMarquee = (e: React.PointerEvent) => {
+  // 編集画面の空白部分（用紙の外も含む）からのドラッグで範囲選択（Shift を押していれば追加選択）
+  const startMarquee = (e: React.PointerEvent<HTMLDivElement>) => {
     if (hand || e.button !== 0) return;
-    e.stopPropagation();
+    // スクロールバー上の操作はそのままスクロールに使う
+    const el = e.currentTarget;
+    const rect = el.getBoundingClientRect();
+    if (
+      e.clientX - rect.left >= el.clientLeft + el.clientWidth ||
+      e.clientY - rect.top >= el.clientTop + el.clientHeight
+    )
+      return;
     const { x, y } = pagePosition(e);
     const base = e.shiftKey ? selected : [];
     setSelected(base);
@@ -1427,10 +1434,22 @@ export default function App() {
           </div>
           <div
             className={`canvas-scroller ${hand ? "hand-mode" : ""} ${panning ? "panning" : ""}`}
-            onPointerDown={startPan}
-            onPointerMove={movePan}
-            onPointerUp={endPan}
-            onPointerCancel={endPan}
+            onPointerDown={(e) => {
+              startPan(e);
+              startMarquee(e);
+            }}
+            onPointerMove={(e) => {
+              movePan(e);
+              moveMarquee(e);
+            }}
+            onPointerUp={() => {
+              endPan();
+              setMarquee(null);
+            }}
+            onPointerCancel={() => {
+              endPan();
+              setMarquee(null);
+            }}
           >
             <div className="ruler-top" style={{ width: pageWidth }}>
               {Array.from(
@@ -1478,10 +1497,6 @@ export default function App() {
                     height:
                       (pageWidth * project.paper.height) / project.paper.width,
                   }}
-                  onPointerDown={startMarquee}
-                  onPointerMove={moveMarquee}
-                  onPointerUp={() => setMarquee(null)}
-                  onPointerCancel={() => setMarquee(null)}
                 >
                   <BackgroundCanvas
                     background={showBackground ? project.background : null}

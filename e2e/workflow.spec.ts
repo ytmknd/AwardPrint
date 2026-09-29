@@ -136,3 +136,20 @@ test("embeds a selected PC font in the print PDF", async ({ page }) => {
   const pdfBytes = await readFile(await (await download).path());
   expect((await PDFDocument.load(pdfBytes)).getPageCount()).toBe(1);
 });
+
+test("selects multiple layout objects by dragging from outside the paper", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1600, height: 1000 });
+  await page.goto("/");
+  const paper = (await page.locator(".paper").boundingBox())!;
+  await page.mouse.move(paper.x - 30, paper.y - 5);
+  await page.mouse.down();
+  await page.mouse.move(paper.x + paper.width + 20, paper.y + paper.height / 2, {
+    steps: 10,
+  });
+  await expect(page.locator(".marquee")).toBeVisible();
+  await page.mouse.up();
+  await expect(page.locator(".marquee")).toHaveCount(0);
+  expect(await page.locator(".text-selected").count()).toBeGreaterThan(1);
+});
