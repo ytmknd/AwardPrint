@@ -186,6 +186,11 @@ export default function App() {
   const [listDrag, setListDrag] = useState<{ from: number; to: number } | null>(
     null,
   );
+  // 用紙上で直接編集中の枠（確定するまで履歴に積まない）
+  const [editing, setEditing] = useState<{ id: string; text: string } | null>(
+    null,
+  );
+  const cancelEditing = useRef(false);
   const pageRef = useRef<HTMLDivElement>(null),
     workspaceRef = useRef<HTMLDivElement>(null),
     dragRef = useRef<Drag | null>(null);
@@ -221,6 +226,14 @@ export default function App() {
     }
     return parts;
   }, [project.columns, project.rows]);
+  const finishEditing = () => {
+    if (!editing) return;
+    const original = project.objects.find((o) => o.id === editing.id);
+    if (!cancelEditing.current && original && original.text !== editing.text)
+      updateObject(editing.id, { text: editing.text });
+    cancelEditing.current = false;
+    setEditing(null);
+  };
   const moveObject = (from: number, to: number) => {
     const target = to > from ? to - 1 : to;
     if (target === from) return;
@@ -1229,7 +1242,7 @@ export default function App() {
                     return (
                       <div
                         key={o.id}
-                        className={`text-object ${selected.includes(o.id) ? "text-selected" : ""} ${overflow ? "text-overflow" : ""}`}
+                        className={`text-object ${selected.includes(o.id) ? "text-selected" : ""} ${overflow ? "text-overflow" : ""} ${o.vertical ? "text-vertical" : ""}`}
                         style={{
                           left: o.x * mmScale,
                           top: o.y * mmScale,
@@ -1257,11 +1270,44 @@ export default function App() {
                             ? "文字が領域を超える可能性があります"
                             : undefined
                         }
-                        onPointerDown={(e) => startDrag(e, o.id)}
+                        onPointerDown={(e) => {
+                          if (editing?.id === o.id) e.stopPropagation();
+                          else startDrag(e, o.id);
+                        }}
                         onPointerMove={dragMove}
                         onPointerUp={endDrag}
+                        onDoubleClick={() => {
+                          setSelected([o.id]);
+                          setEditing({ id: o.id, text: o.text });
+                        }}
                       >
-                        <div className="text-content">{text || " "}</div>
+                        {editing?.id === o.id ? (
+                          <textarea
+                            className="inline-editor"
+                            autoFocus
+                            value={editing.text}
+                            onFocus={(e) => {
+                              const end = e.currentTarget.value.length;
+                              e.currentTarget.setSelectionRange(end, end);
+                            }}
+                            onChange={(e) =>
+                              setEditing({ id: o.id, text: e.target.value })
+                            }
+                            onBlur={finishEditing}
+                            onKeyDown={(e) => {
+                              if (e.key === "Escape") {
+                                e.preventDefault();
+                                cancelEditing.current = true;
+                                e.currentTarget.blur();
+                              } else if (e.key === "Enter" && e.ctrlKey) {
+                                e.preventDefault();
+                                e.currentTarget.blur();
+                              }
+                            }}
+                          />
+                        ) : (
+                          <div className="text-content">{text || " "}</div>
+                        )}
                       </div>
                     );
                   })}

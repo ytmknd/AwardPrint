@@ -59,6 +59,13 @@ function drawHorizontal(
     spacing = mmToPt(obj.letterSpacing);
   const lines = splitLines(font, text, size, width, spacing);
   const step = size * obj.lineHeight;
+  // 画面表示（CSS）と同じく、文字のまとまりを枠の上下中央に置き、
+  // 各行は行の高さの中で上下中央に置く。はみ出す場合は上揃え。
+  const blockTop = top - Math.max(0, (height - lines.length * step) / 2);
+  const ascent = font.heightAtSize(size, { descender: false }),
+    contentHeight = font.heightAtSize(size);
+  const baseline = (i: number) =>
+    blockTop - i * step - (step - contentHeight) / 2 - ascent;
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
     const measured =
@@ -73,7 +80,7 @@ function drawHorizontal(
     if (spacing === 0)
       page.drawText(line, {
         x: x + dx,
-        y: top - size - i * step,
+        y: baseline(i),
         size,
         font,
         color: color(obj.color),
@@ -84,7 +91,7 @@ function drawHorizontal(
       for (const char of line) {
         page.drawText(char, {
           x: cursor,
-          y: top - size - i * step,
+          y: baseline(i),
           size,
           font,
           color: color(obj.color),

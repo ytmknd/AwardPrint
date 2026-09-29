@@ -543,6 +543,34 @@ svg {
   height: 100%;
   overflow: hidden;
 }
+/* 横書きは枠の上下中央に配置（はみ出す場合は上揃え。PDF出力も同じ） */
+.text-object:not(.text-vertical) .text-content {
+  display: flex;
+  flex-direction: column;
+  justify-content: safe center;
+}
+.inline-editor {
+  display: block;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  border: none;
+  outline: none;
+  resize: none;
+  overflow: hidden;
+  background: #fffffff0;
+  box-shadow: 0 0 0 2px #2986b5;
+  cursor: text;
+  font: inherit;
+  color: inherit;
+  text-align: inherit;
+  line-height: inherit;
+  letter-spacing: inherit;
+  writing-mode: inherit;
+  white-space: pre-wrap;
+  user-select: text;
+}
 .text-object:hover {
   outline: 1px dashed #5b8bb4;
 }
