@@ -3,6 +3,8 @@ import { readFile } from "node:fs/promises";
 import { PDFArray, PDFDict, PDFDocument, PDFName, PDFRawStream } from "pdf-lib";
 import ExcelJS from "exceljs";
 import JSZip from "jszip";
+import fontkit from "@pdf-lib/fontkit";
+import { inflateSync } from "node:zlib";
 import { createPdf } from "./pdf";
 import {
   parseProjectJson,
@@ -237,8 +239,12 @@ describe("PDF output", () => {
   const originalFetch = globalThis.fetch;
   beforeEach(() => {
     globalThis.fetch = vi.fn(async (url: string | URL | Request) => {
-      const name = String(url).split("/").at(-1)!;
-      const bytes = await readFile(`public/fonts/${name}`);
+      const name = String(url).split("/").at(-1)!.split("?")[0];
+      const bytes = await readFile(
+        name.endsWith(".wasm")
+          ? `node_modules/harfbuzzjs/dist/${name}`
+          : `public/fonts/${name}`,
+      );
       return new Response(bytes);
     }) as typeof fetch;
   });
@@ -281,16 +287,75 @@ describe("PDF output", () => {
     const printAgain = await PDFDocument.load(
       await createPdf(project, [0], false),
     );
+    // フォントは文書で使う文字だけから作るため、字形番号（<...> Tj）とフォント名は文書ごとに違う。
+    // それ以外（位置・大きさ・色）が同じなら、1ページ目は他の受賞者の影響を受けていない。
     const content = (doc: PDFDocument) => {
       const references = doc.getPage(0).node.Contents() as PDFArray;
-      return references
-        .asArray()
-        .map((ref) =>
-          Array.from((doc.context.lookup(ref) as PDFRawStream).getContents()),
-        );
+      return references.asArray().map((ref) =>
+        Buffer.from(
+          inflateSync((doc.context.lookup(ref) as PDFRawStream).getContents()),
+        )
+          .toString("latin1")
+          .replace(/<[0-9A-Fa-f]*>/g, "<>")
+          .replace(/\/[\w-]+ ([\d.]+ Tf)/g, "/F $1"),
+      );
     };
     expect(content(printAgain)).toEqual(content(print));
   }, 120_000);
+  it("embeds fonts that contain an outline for every Japanese character drawn", async () => {
+    const project = sampleProject();
+    project.objects.push(
+      { ...project.objects[0], text: "ゴシック 髙﨑", fontId: "sans" },
+      { ...project.objects[0], text: "縦書き「賞」。", vertical: true },
+    );
+    const pdf = await PDFDocument.load(
+      await createPdf(project, [0, 1, 2], false),
+    );
+    const embedded: { name: string; bytes: Uint8Array }[] = [];
+    for (const page of pdf.getPages()) {
+      const fonts = page.node.Resources()!.lookup(PDFName.of("Font"), PDFDict);
+      for (const key of fonts.keys()) {
+        const cid = fonts
+          .lookup(key, PDFDict)
+          .lookup(PDFName.of("DescendantFonts"), PDFArray)
+          .lookup(0, PDFDict);
+        const descriptor = cid.lookup(PDFName.of("FontDescriptor"), PDFDict);
+        const file =
+          descriptor.lookup(PDFName.of("FontFile3")) ??
+          descriptor.lookup(PDFName.of("FontFile2"));
+        const name = String(descriptor.get(PDFName.of("FontName")));
+        if (
+          file instanceof PDFRawStream &&
+          !embedded.some((e) => e.name === name)
+        )
+          embedded.push({ name, bytes: inflateSync(file.contents) });
+      }
+    }
+    expect(embedded.length).toBe(2); // 太字の明朝とゴシック
+    // 3人分の差し込み結果と追加した文字（縦書きの約物は縦用の字形で描かれる）
+    const drawn =
+      "西条大町神拝小山田太郎佐藤花子田中一殿令和ゴシック髙﨑縦書き﹁賞﹂︒";
+    const covered = new Set<string>();
+    for (const { bytes } of embedded) {
+      const font = fontkit.create(bytes);
+      for (const char of drawn) {
+        const glyph = font.glyphForCodePoint(char.codePointAt(0)!);
+        if (glyph.id !== 0 && glyph.path.commands.length > 0) covered.add(char);
+      }
+    }
+    expect([...drawn].filter((char) => !covered.has(char))).toEqual([]);
+  }, 30_000);
+  it("finishes the test-mark PDF and records whose merged text is empty", async () => {
+    const project = sampleProject();
+    const marks = await PDFDocument.load(
+      await createPdf(project, [0], false, undefined, true),
+    );
+    expect(marks.getPageCount()).toBe(1);
+    project.rows = [{ 氏名: "", 学校名: "", 学年: "", 日付: "" }];
+    project.objects = project.objects.filter((o) => o.kind === "merge");
+    const blank = await PDFDocument.load(await createPdf(project, [0], false));
+    expect(blank.getPageCount()).toBe(1);
+  }, 20_000);
   it("renders vertical writing and print offset without changing paper size", async () => {
     const project = sampleProject();
     project.objects = [

@@ -1,6 +1,7 @@
 import { PDFDocument, rgb, degrees, type PDFFont, type PDFPage } from "pdf-lib";
 import fontkit from "@pdf-lib/fontkit";
 import { base64ToBytes } from "./files";
+import { subsetFont } from "./fontSubset";
 import {
   mergeText,
   mmToPt,
@@ -103,6 +104,17 @@ function drawHorizontal(
   }
   return lines.length * step > height + step - size;
 }
+// 縦書きで縦用の字形に置き換える約物
+const VERTICAL_FORMS: Record<string, string> = {
+  "、": "︑",
+  "。": "︒",
+  "「": "﹁",
+  "」": "﹂",
+  "『": "﹃",
+  "』": "﹄",
+  "（": "︵",
+  "）": "︶",
+};
 function drawVertical(
   page: PDFPage,
   font: PDFFont,
@@ -129,17 +141,7 @@ function drawVertical(
   }
   columns.forEach((chars, ci) =>
     chars.forEach((char, ri) => {
-      const verticalForms: Record<string, string> = {
-        "、": "︑",
-        "。": "︒",
-        "「": "﹁",
-        "」": "﹂",
-        "『": "﹃",
-        "』": "﹄",
-        "（": "︵",
-        "）": "︶",
-      };
-      const glyph = verticalForms[char] ?? char;
+      const glyph = VERTICAL_FORMS[char] ?? char;
       // Draw each glyph upright; rotate only glyphs that are conventionally sideways in vertical text.
       const sideways = /[A-Za-z0-9!?()\[\]]/.test(glyph);
       page.drawText(glyph, {
@@ -164,43 +166,67 @@ export async function createPdf(
 ): Promise<Uint8Array> {
   const pdf = await PDFDocument.create();
   pdf.registerFontkit(fontkit);
-  const fonts = new Map<string, PDFFont>();
-  const builtins = [
-    ["serif", "NotoSerifCJKjp-Regular.otf"],
-    ["sans", "NotoSansCJKjp-Regular.otf"],
-    ["serif-bold", "NotoSerifCJKjp-Bold.otf"],
-    ["sans-bold", "NotoSansCJKjp-Bold.otf"],
-  ];
-  const needed = new Set(
-    project.objects.map((o) =>
-      o.bold && ["serif", "sans"].includes(o.fontId)
-        ? `${o.fontId}-bold`
-        : o.fontId,
-    ),
-  );
-  for (const [id, filename] of builtins.filter(([id]) => needed.has(id))) {
-    const response = await fetch(
-      `${import.meta.env.BASE_URL}fonts/${filename}`,
-    );
-    if (!response.ok) throw new Error("標準フォントを読み込めませんでした");
-    fonts.set(
-      id,
-      await pdf.embedFont(await response.arrayBuffer(), { subset: true }),
-    );
-  }
-  for (const asset of project.fonts) {
-    if (!asset.embeddingAllowed) continue;
-    fonts.set(
-      asset.id,
-      await pdf.embedFont(base64ToBytes(asset.data), { subset: true }),
-    );
-  }
-  let sourcePdf: PDFDocument | null = null;
-  if (withBackground && project.background)
-    sourcePdf = await PDFDocument.load(base64ToBytes(project.background.data));
+  const builtins: Record<string, string> = {
+    serif: "NotoSerifCJKjp-Regular.otf",
+    sans: "NotoSansCJKjp-Regular.otf",
+    "serif-bold": "NotoSerifCJKjp-Bold.otf",
+    "sans-bold": "NotoSansCJKjp-Bold.otf",
+  };
+  const fontBytes = async (id: string): Promise<ArrayBuffer | Uint8Array> => {
+    if (builtins[id]) {
+      const response = await fetch(
+        `${import.meta.env.BASE_URL}fonts/${builtins[id]}`,
+      );
+      if (!response.ok) throw new Error("標準フォントを読み込めませんでした");
+      return response.arrayBuffer();
+    }
+    const asset = project.fonts.find((f) => f.id === id);
+    if (!asset?.embeddingAllowed)
+      throw new Error(
+        `${id} のフォントがありません。埋め込み権限を確認してください。`,
+      );
+    return base64ToBytes(asset.data);
+  };
   const records: DataRow[] = project.rows.length
     ? indices.map((i) => project.rows[i] ?? {})
     : [{}];
+  // 全ページで描く文字をフォントごとに集めてから、その文字だけのフォントを埋め込む。
+  // pdf-lib 自身のサブセット機能（subset: true）は日本語フォントを壊すため使わない（fontSubset.ts 参照）。
+  // 文字のない枠は描かず、1文字も使わないフォントは埋め込まない。
+  const pages = records.map((row) =>
+    testMarks
+      ? []
+      : project.objects
+          .map((obj) => ({
+            obj,
+            text: mergeText(obj.text, row),
+            fontId:
+              obj.bold && ["serif", "sans"].includes(obj.fontId)
+                ? `${obj.fontId}-bold`
+                : obj.fontId,
+          }))
+          .filter(({ text }) => /\S/.test(text)),
+  );
+  const charsByFont = new Map<string, Set<string>>();
+  for (const { obj, text, fontId } of pages.flat()) {
+    const chars = charsByFont.get(fontId) ?? new Set<string>();
+    for (const char of text) {
+      chars.add(char);
+      if (obj.vertical && VERTICAL_FORMS[char]) chars.add(VERTICAL_FORMS[char]);
+    }
+    charsByFont.set(fontId, chars);
+  }
+  const fonts = new Map<string, PDFFont>();
+  for (const [id, chars] of charsByFont)
+    fonts.set(
+      id,
+      await pdf.embedFont(await subsetFont(await fontBytes(id), chars), {
+        subset: false,
+      }),
+    );
+  let sourcePdf: PDFDocument | null = null;
+  if (withBackground && project.background)
+    sourcePdf = await PDFDocument.load(base64ToBytes(project.background.data));
   for (let i = 0; i < records.length; i++) {
     const page = pdf.addPage([
       mmToPt(project.paper.width),
@@ -224,17 +250,8 @@ export async function createPdf(
     }
     if (testMarks) drawTestMarks(page);
     else
-      for (const obj of project.objects) {
-        const fontId =
-          obj.bold && ["serif", "sans"].includes(obj.fontId)
-            ? `${obj.fontId}-bold`
-            : obj.fontId;
-        const font = fonts.get(fontId);
-        if (!font)
-          throw new Error(
-            `${obj.fontId} のフォントがありません。埋め込み権限を確認してください。`,
-          );
-        const text = mergeText(obj.text, records[i]);
+      for (const { obj, text, fontId } of pages[i]) {
+        const font = fonts.get(fontId)!;
         if (obj.vertical)
           drawVertical(page, font, obj, text, project.offsetX, project.offsetY);
         else
