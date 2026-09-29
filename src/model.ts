@@ -306,11 +306,29 @@ export function datePart(value: string, part: DatePart) {
       return String(d.year);
   }
 }
-// {列名} または {列名:年} のような差し込み指定を列名と日付の部分に分ける
-export function parseField(spec: string): { field: string; part?: DatePart } {
+// 「６年」「6年生」などから最初の数字だけを取り出す
+export const NUMBER_PARTS = ["数字", "半角数字", "全角数字"] as const;
+export type NumberPart = (typeof NUMBER_PARTS)[number];
+export function numberPart(value: string, part: NumberPart) {
+  const digits = /[0-9０-９]+/.exec(value)?.[0] ?? "";
+  if (part === "数字") return digits;
+  const half = digits.normalize("NFKC");
+  return part === "半角数字"
+    ? half
+    : half.replace(/[0-9]/g, (c) =>
+        String.fromCharCode(c.charCodeAt(0) + 0xfee0),
+      );
+}
+export const hasNumberWithText = (value: string) =>
+  /[0-9０-９]/.test(value) && /[^0-9０-９\s]/.test(value);
+type FieldPart = DatePart | NumberPart;
+// {列名} または {列名:年} {列名:数字} のような差し込み指定を列名と部分に分ける
+export function parseField(spec: string): { field: string; part?: FieldPart } {
   const i = spec.lastIndexOf(":");
-  const part = spec.slice(i + 1) as DatePart;
-  return i > 0 && DATE_PARTS.includes(part)
+  const part = spec.slice(i + 1) as FieldPart;
+  return i > 0 &&
+    (DATE_PARTS.includes(part as DatePart) ||
+      NUMBER_PARTS.includes(part as NumberPart))
     ? { field: spec.slice(0, i), part }
     : { field: spec };
 }
@@ -318,7 +336,10 @@ export const mergeText = (text: string, row: DataRow) =>
   text.replace(/\{([^{}]+)\}/g, (_, spec: string) => {
     const { field, part } = parseField(spec);
     const value = row[field] ?? "";
-    return part ? datePart(value, part) : value;
+    if (!part) return value;
+    return NUMBER_PARTS.includes(part as NumberPart)
+      ? numberPart(value, part as NumberPart)
+      : datePart(value, part as DatePart);
   });
 export const missingFields = (objects: TextObject[], columns: string[]) => [
   ...new Set(

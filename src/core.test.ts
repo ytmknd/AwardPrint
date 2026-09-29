@@ -76,6 +76,14 @@ describe("paper and merge data", () => {
     project.objects[0].text = "{日付:年}{不明:月}";
     expect(missingFields(project.objects, project.columns)).toEqual(["不明"]);
   });
+  it("extracts only the number from values like ６年", () => {
+    const row = { 学年: "６年", 学年2: "6年生", 空: "" };
+    expect(mergeText("{学年:数字}|{学年2:数字}|{空:数字}", row)).toBe("６|6|");
+    expect(mergeText("{学年:半角数字}|{学年2:全角数字}", row)).toBe("6|６");
+    const project = sampleProject();
+    project.objects[0].text = "{学年:数字}";
+    expect(missingFields(project.objects, project.columns)).toEqual([]);
+  });
   it("opens the sample as a fully placed A4 portrait certificate", () => {
     const project = sampleProject();
     expect(project.paper).toMatchObject({

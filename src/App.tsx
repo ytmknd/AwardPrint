@@ -48,6 +48,7 @@ import {
 import { createPdf } from "./pdf";
 import {
   DATE_PARTS,
+  hasNumberWithText,
   makeObject,
   mergeText,
   parseDate,
@@ -210,15 +211,16 @@ export default function App() {
       objects: p.objects.map((o) => (o.id === id ? { ...o, ...patch } : o)),
     }));
   const selectedObject = project.objects.find((o) => o.id === selected[0]);
-  const dateColumns = useMemo(
-    () =>
-      new Set(
-        project.columns.filter((c) =>
-          project.rows.slice(0, 5).some((r) => parseDate(r[c] ?? "")),
-        ),
-      ),
-    [project.columns, project.rows],
-  );
+  // 列ごとに差し込める部分（日付なら年・月・日…、「６年」のような値なら数字）
+  const columnParts = useMemo(() => {
+    const parts = new Map<string, readonly string[]>();
+    for (const c of project.columns) {
+      const values = project.rows.slice(0, 5).map((r) => r[c] ?? "");
+      if (values.some((v) => parseDate(v))) parts.set(c, DATE_PARTS);
+      else if (values.some(hasNumberWithText)) parts.set(c, ["数字"]);
+    }
+    return parts;
+  }, [project.columns, project.rows]);
   const moveObject = (from: number, to: number) => {
     const target = to > from ? to - 1 : to;
     if (target === from) return;
@@ -971,12 +973,12 @@ export default function App() {
                         <span>{column}</span>
                         <span className="field-add">＋</span>
                       </button>
-                      {dateColumns.has(column) && (
+                      {columnParts.has(column) && (
                         <div
                           className="date-parts"
-                          title="日付の一部だけを差し込みます"
+                          title="値の一部だけを差し込みます"
                         >
-                          {DATE_PARTS.map((part) => (
+                          {columnParts.get(column)!.map((part) => (
                             <button
                               key={part}
                               className="date-part"
@@ -1343,6 +1345,8 @@ export default function App() {
                     差し込みには &#123;列名&#125; を使用します。 日付の一部は
                     &#123;日付:年&#125; &#123;日付:月&#125; &#123;日付:日&#125;
                     のように指定できます（ほかに 曜日・元号・和暦・西暦）。
+                    「６年」から数字だけを取り出すには &#123;学年:数字&#125;
+                    （半角数字・全角数字 も指定可）を使います。
                   </p>
                 </Section>
                 <Section title="位置とサイズ">
