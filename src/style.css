@@ -588,6 +588,54 @@ svg {
   pointer-events: none;
   z-index: 4;
 }
+.background-offset {
+  display: grid;
+  gap: 8px;
+}
+/* 十字キー配置の位置調整ボタン */
+.nudge-pad {
+  display: grid;
+  grid-template-columns: repeat(3, 32px);
+  grid-template-areas:
+    ". up ."
+    "left reset right"
+    ". down .";
+  gap: 4px;
+  justify-content: center;
+}
+.nudge-pad button {
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border: 1px solid #d5dfe7;
+  border-radius: 6px;
+  background: #fff;
+  color: #35495e;
+}
+.nudge-pad button:hover {
+  border-color: #2680aa;
+  background: #eaf4fa;
+}
+.nudge-pad svg {
+  width: 16px;
+  height: 16px;
+}
+.nudge-up {
+  grid-area: up;
+}
+.nudge-left {
+  grid-area: left;
+}
+.nudge-reset {
+  grid-area: reset;
+}
+.nudge-right {
+  grid-area: right;
+}
+.nudge-down {
+  grid-area: down;
+}
 .marquee {
   position: absolute;
   border: 1px solid #2986b5;

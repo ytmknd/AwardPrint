@@ -240,9 +240,10 @@ export async function createPdf(
         ),
       );
       const embedded = await pdf.embedPage(source);
+      // 下絵の位置調整（右・下が正、PDFの座標は上が正）
       page.drawPage(embedded, {
-        x: 0,
-        y: 0,
+        x: mmToPt(project.background!.offsetX ?? 0),
+        y: -mmToPt(project.background!.offsetY ?? 0),
         width: page.getWidth(),
         height: page.getHeight(),
         opacity: project.background!.opacity,

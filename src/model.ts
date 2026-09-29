@@ -42,6 +42,10 @@ export type Background = {
   height: number;
   visible: boolean;
   opacity: number;
+  // 下絵の位置調整（mm、右・下が正）。実際の用紙の印刷位置に下絵を合わせるためのもので、
+  // 印刷される文字は動かさない。古いJSONには無いので未設定は 0 として扱う。
+  offsetX?: number;
+  offsetY?: number;
 };
 export type Project = {
   version: 1;

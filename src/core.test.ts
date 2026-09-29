@@ -302,6 +302,57 @@ describe("PDF output", () => {
     };
     expect(content(printAgain)).toEqual(content(print));
   }, 120_000);
+  it("shifts only the background by its position adjustment", async () => {
+    const project = sampleProject();
+    const background = await PDFDocument.create();
+    background
+      .addPage([mmToPt(210), mmToPt(297)])
+      .drawRectangle({ x: 10, y: 10, width: 100, height: 100 });
+    project.background = {
+      name: "background.pdf",
+      data: Buffer.from(await background.save()).toString("base64"),
+      page: 1,
+      pageCount: 1,
+      width: 210,
+      height: 297,
+      visible: true,
+      opacity: 1,
+    };
+    // 下絵を描く行列（a b c d e f cm の e・f が位置）を取り出す
+    const placement = async (withBackground: boolean) => {
+      const doc = await PDFDocument.load(
+        await createPdf(project, [0], withBackground),
+      );
+      const text = (doc.getPage(0).node.Contents() as PDFArray)
+        .asArray()
+        .map((ref) =>
+          Buffer.from(
+            inflateSync(
+              (doc.context.lookup(ref) as PDFRawStream).getContents(),
+            ),
+          ).toString("latin1"),
+        )
+        .join("\n");
+      // pdf-lib は下絵の前に「gs」の直後で位置の行列を出す
+      const m = / gs\n1 0 0 1 ([-\d.]+) ([-\d.]+) cm/.exec(text);
+      return { text, e: Number(m?.[1]), f: Number(m?.[2]) };
+    };
+    const before = await placement(true);
+    const printBefore = await placement(false);
+    project.background.offsetX = 2;
+    project.background.offsetY = 3;
+    const after = await placement(true);
+    expect(after.e - before.e).toBeCloseTo(mmToPt(2), 3);
+    expect(after.f - before.f).toBeCloseTo(-mmToPt(3), 3);
+    // 印刷用（下絵なし）の文字の位置は変わらない
+    const printAfter = await placement(false);
+    const normalize = (text: string) =>
+      text
+        .replace(/<[0-9A-Fa-f]*>/g, "<>")
+        .replace(/\/[\w-]+ ([\d.]+ Tf)/g, "/F $1");
+    expect(printBefore.e).toBeNaN(); // 印刷用には下絵が入らない
+    expect(normalize(printAfter.text)).toBe(normalize(printBefore.text));
+  }, 60_000);
   it("embeds fonts that contain an outline for every Japanese character drawn", async () => {
     const project = sampleProject();
     project.objects.push(

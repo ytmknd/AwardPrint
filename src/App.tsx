@@ -3,6 +3,11 @@ import {
   AlignCenter,
   AlignLeft,
   AlignRight,
+  ArrowDown,
+  ArrowLeft,
+  ArrowRight,
+  ArrowUp,
+  RotateCcw,
   ChevronLeft,
   ChevronRight,
   Download,
@@ -314,6 +319,74 @@ export default function App() {
     cancelEditing.current = false;
     setEditing(null);
   };
+  // 下絵の位置調整（mm）。クリックで 0.1mm、Shift+クリックで 1mm 動かす
+  const setBackgroundOffset = (
+    fn: (x: number, y: number) => [number, number],
+  ) =>
+    change((p) => {
+      if (!p.background) return p;
+      const [x, y] = fn(p.background.offsetX ?? 0, p.background.offsetY ?? 0);
+      return {
+        ...p,
+        background: {
+          ...p.background,
+          offsetX: Math.round(x * 10) / 10,
+          offsetY: Math.round(y * 10) / 10,
+        },
+      };
+    });
+  const backgroundOffsetControls = () =>
+    project.background && (
+      <div className="background-offset">
+        <div className="two-col">
+          <NumberInput
+            label="下絵 左右"
+            value={project.background.offsetX ?? 0}
+            onChange={(x) => setBackgroundOffset((_, y) => [x, y])}
+            suffix="mm"
+          />
+          <NumberInput
+            label="下絵 上下"
+            value={project.background.offsetY ?? 0}
+            onChange={(y) => setBackgroundOffset((x) => [x, y])}
+            suffix="mm"
+          />
+        </div>
+        <div className="nudge-pad">
+          {(
+            [
+              ["up", <ArrowUp />, 0, -1, "上へ"],
+              ["left", <ArrowLeft />, -1, 0, "左へ"],
+              ["reset", <RotateCcw />, 0, 0, "0 に戻す"],
+              ["right", <ArrowRight />, 1, 0, "右へ"],
+              ["down", <ArrowDown />, 0, 1, "下へ"],
+            ] as const
+          ).map(([key, icon, dx, dy, label]) => (
+            <button
+              key={key}
+              className={`nudge-${key}`}
+              title={
+                key === "reset"
+                  ? "下絵の位置調整を 0 に戻す"
+                  : `下絵を${label}（クリック 0.1mm／Shift+クリック 1mm）`
+              }
+              onClick={(e) => {
+                const step = e.shiftKey ? 1 : 0.1;
+                setBackgroundOffset((x, y) =>
+                  key === "reset" ? [0, 0] : [x + dx * step, y + dy * step],
+                );
+              }}
+            >
+              {icon}
+            </button>
+          ))}
+        </div>
+        <p className="panel-tip">
+          下絵（画面と確認用PDF）だけを動かし、実際の用紙の印刷位置に合わせます。印刷される文字は動きません。文字の印刷位置そのものがずれる場合は「用紙設定」の「印刷
+          X / Y オフセット」を使います。
+        </p>
+      </div>
+    );
   const moveObject = (from: number, to: number) => {
     const target = to > from ? to - 1 : to;
     if (target === from) return;
@@ -1412,6 +1485,7 @@ export default function App() {
                 >
                   <BackgroundCanvas
                     background={showBackground ? project.background : null}
+                    mmScale={mmScale}
                     width={pageWidth}
                     height={
                       (pageWidth * project.paper.height) / project.paper.width
@@ -1838,6 +1912,11 @@ export default function App() {
                 </p>
               </div>
             )}
+            {!selectedObject && project.background && (
+              <Section title="下絵の位置調整">
+                {backgroundOffsetControls()}
+              </Section>
+            )}
             {selected.length > 1 && (
               <Section title="整列">
                 <div className="align-grid">
@@ -2159,6 +2238,8 @@ export default function App() {
                           下絵を削除
                         </Button>
                       </div>
+                      <h3>下絵の位置調整</h3>
+                      {backgroundOffsetControls()}
                     </div>
                   )}
                 </>

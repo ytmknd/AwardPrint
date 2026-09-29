@@ -20,10 +20,12 @@ export function BackgroundCanvas({
   background,
   width,
   height,
+  mmScale,
 }: {
   background: Background | null;
   width: number;
   height: number;
+  mmScale: number;
 }) {
   const ref = useRef<HTMLCanvasElement>(null);
   const [error, setError] = useState("");
@@ -69,11 +71,17 @@ export function BackgroundCanvas({
       {error && (
         <span className="absolute inset-0 p-4 text-red-600">{error}</span>
       )}
-      <canvas
-        ref={ref}
-        className="absolute inset-0 h-full w-full pointer-events-none"
-        style={{ opacity: background.opacity }}
-      />
+      {/* 位置調整でずらした下絵が用紙の外に出ないよう切り抜く */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <canvas
+          ref={ref}
+          className="absolute inset-0 h-full w-full"
+          style={{
+            opacity: background.opacity,
+            transform: `translate(${(background.offsetX ?? 0) * mmScale}px, ${(background.offsetY ?? 0) * mmScale}px)`,
+          }}
+        />
+      </div>
     </>
   );
 }
