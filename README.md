@@ -89,3 +89,7 @@ Vite uses relative asset paths, so the app works under the `/AwardPrint/` projec
 - A custom font file without a bold face cannot reproduce a bold setting in the PDF. Load and select the font's bold face separately.
 - If Excel has already converted an identifier to a number and discarded leading zeros, AwardPrint cannot recover them. Excel display formats such as `0000` are read as displayed text.
 - Large PDF templates, fonts, and hundreds of output pages can use substantial device memory. The data table displays its first 200 rows, while PDF generation can use all rows.
+
+## License
+
+AwardPrint is released under the [MIT License](LICENSE). Bundled fonts are covered by the SIL Open Font License 1.1 (see `public/fonts/`), and third-party dependencies remain under their own licenses.
