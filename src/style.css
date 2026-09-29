@@ -500,7 +500,8 @@ svg {
     0 0 0 1px #cbd5df;
   position: relative;
   flex: none;
-  overflow: hidden;
+  /* 用紙からはみ出した文字も画面上では確認できるようにする（印刷時は用紙外は出ない） */
+  overflow: visible;
   user-select: none;
 }
 .grid-overlay {
