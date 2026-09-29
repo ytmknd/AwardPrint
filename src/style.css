@@ -588,6 +588,37 @@ svg {
   pointer-events: none;
   z-index: 4;
 }
+.marquee {
+  position: absolute;
+  border: 1px solid #2986b5;
+  background: #2986b51a;
+  pointer-events: none;
+}
+.hand-mode,
+.hand-mode .paper,
+.hand-mode .text-object,
+.hand-mode .resize-handle {
+  cursor: grab !important;
+}
+.panning,
+.panning .paper,
+.panning .text-object,
+.panning .resize-handle {
+  cursor: grabbing !important;
+}
+.multi-note {
+  display: grid;
+  gap: 4px;
+  margin: 12px 14px 0;
+  padding: 10px 11px;
+  border-radius: 6px;
+  background: #eaf4fa;
+  color: #35495e;
+  font-size: 12px;
+}
+.multi-note strong {
+  color: #1e6d97;
+}
 .smart-guide {
   position: absolute;
   pointer-events: none;

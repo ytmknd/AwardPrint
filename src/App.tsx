@@ -12,6 +12,7 @@ import {
   FilePlus2,
   FileText,
   Grid3X3,
+  Hand,
   HelpCircle,
   Menu,
   Move,
@@ -115,7 +116,8 @@ const NumberInput = ({
   suffix = "",
 }: {
   label: string;
-  value: number;
+  // undefined は複数選択で値が混在している状態
+  value: number | undefined;
   onChange: (n: number) => void;
   step?: number;
   min?: number;
@@ -130,8 +132,11 @@ const NumberInput = ({
         step={step}
         min={min}
         max={max}
-        value={value}
-        onChange={(e) => onChange(Number(e.target.value))}
+        value={value ?? ""}
+        placeholder={value === undefined ? "混在" : undefined}
+        onChange={(e) => {
+          if (e.target.value !== "") onChange(Number(e.target.value));
+        }}
       />
       <em>{suffix}</em>
     </span>
@@ -202,6 +207,49 @@ export default function App() {
   const pageRef = useRef<HTMLDivElement>(null),
     workspaceRef = useRef<HTMLDivElement>(null),
     dragRef = useRef<Drag | null>(null);
+  // 範囲選択（mm 単位）と手のひらツール
+  const [marquee, setMarquee] = useState<{
+    x1: number;
+    y1: number;
+    x2: number;
+    y2: number;
+    base: string[];
+  } | null>(null);
+  const [handMode, setHandMode] = useState(false),
+    [spaceDown, setSpaceDown] = useState(false),
+    [panning, setPanning] = useState(false);
+  const hand = handMode || spaceDown;
+  const panRef = useRef<{
+    x: number;
+    y: number;
+    left: number;
+    top: number;
+  } | null>(null);
+  // Space を押している間だけ手のひらツール（入力欄では無効）
+  useEffect(() => {
+    const typing = (e: KeyboardEvent) =>
+      ["INPUT", "TEXTAREA", "SELECT"].includes(
+        (e.target as HTMLElement)?.tagName,
+      );
+    const down = (e: KeyboardEvent) => {
+      if (e.code === "Space" && !typing(e)) {
+        e.preventDefault();
+        setSpaceDown(true);
+      }
+    };
+    const up = (e: KeyboardEvent) => {
+      if (e.code === "Space") setSpaceDown(false);
+    };
+    const reset = () => setSpaceDown(false);
+    window.addEventListener("keydown", down);
+    window.addEventListener("keyup", up);
+    window.addEventListener("blur", reset);
+    return () => {
+      window.removeEventListener("keydown", down);
+      window.removeEventListener("keyup", up);
+      window.removeEventListener("blur", reset);
+    };
+  }, []);
   const pdfInput = useRef<HTMLInputElement>(null),
     dataInput = useRef<HTMLInputElement>(null),
     fontInput = useRef<HTMLInputElement>(null),
@@ -224,6 +272,29 @@ export default function App() {
       objects: p.objects.map((o) => (o.id === id ? { ...o, ...patch } : o)),
     }));
   const selectedObject = project.objects.find((o) => o.id === selected[0]);
+  const selectedObjects = project.objects.filter((o) =>
+    selected.includes(o.id),
+  );
+  const multi = selectedObjects.length > 1;
+  // 選択中の枠で共通の値（枠ごとに違う項目は undefined＝混在）
+  const shared = Object.fromEntries(
+    Object.keys(selectedObject ?? {}).map((key) => {
+      const k = key as keyof TextObject;
+      const first = selectedObjects[0]?.[k];
+      return [
+        k,
+        selectedObjects.every((o) => o[k] === first) ? first : undefined,
+      ];
+    }),
+  ) as Partial<TextObject>;
+  // プロパティ変更は選択中のすべての枠にまとめて適用する
+  const updateSelected = (patch: Partial<TextObject>) =>
+    change((p) => ({
+      ...p,
+      objects: p.objects.map((o) =>
+        selected.includes(o.id) ? { ...o, ...patch } : o,
+      ),
+    }));
   // 列ごとに差し込める部分（日付なら年・月・日…、「６年」のような値なら数字）
   const columnParts = useMemo(() => {
     const parts = new Map<string, readonly string[]>();
@@ -537,7 +608,7 @@ export default function App() {
         ...p,
         fonts: [...p.fonts, font],
         objects: p.objects.map((o) =>
-          o.id === selected[0] ? { ...o, fontId: font.id } : o,
+          selected.includes(o.id) ? { ...o, fontId: font.id } : o,
         ),
       }));
       setNotice(`${font.name} を追加しました`);
@@ -619,7 +690,7 @@ export default function App() {
         ...p,
         fonts: [...p.fonts, asset],
         objects: p.objects.map((o) =>
-          o.id === selected[0] ? { ...o, fontId: asset.id } : o,
+          selected.includes(o.id) ? { ...o, fontId: asset.id } : o,
         ),
       }));
       setDialog(null);
@@ -639,11 +710,16 @@ export default function App() {
     };
   };
   const startDrag = (e: React.PointerEvent, id: string, resize?: string) => {
+    // 手のひらツール中や左ボタン以外は、スクロール（パン）に任せる
+    if (hand || e.button !== 0) return;
     e.stopPropagation();
+    // Shift+クリックで選択に追加／選択済みなら外す
+    if (e.shiftKey && !resize && selected.includes(id)) {
+      setSelected(selected.filter((s) => s !== id));
+      return;
+    }
     const ids = e.shiftKey
-      ? selected.includes(id)
-        ? selected
-        : [...selected, id]
+      ? [...selected, id]
       : selected.includes(id)
         ? selected
         : [id];
@@ -656,6 +732,59 @@ export default function App() {
       resize,
     };
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+  };
+  // 用紙の空白部分からのドラッグで範囲選択（Shift を押していれば追加選択）
+  const startMarquee = (e: React.PointerEvent) => {
+    if (hand || e.button !== 0) return;
+    e.stopPropagation();
+    const { x, y } = pagePosition(e);
+    const base = e.shiftKey ? selected : [];
+    setSelected(base);
+    setMarquee({ x1: x, y1: y, x2: x, y2: y, base });
+    e.currentTarget.setPointerCapture(e.pointerId);
+  };
+  const moveMarquee = (e: React.PointerEvent) => {
+    if (!marquee) return;
+    const { x, y } = pagePosition(e);
+    const left = Math.min(marquee.x1, x),
+      right = Math.max(marquee.x1, x),
+      top = Math.min(marquee.y1, y),
+      bottom = Math.max(marquee.y1, y);
+    const hits = project.objects
+      .filter(
+        (o) =>
+          o.x < right &&
+          o.x + o.width > left &&
+          o.y < bottom &&
+          o.y + o.height > top,
+      )
+      .map((o) => o.id);
+    setMarquee({ ...marquee, x2: x, y2: y });
+    setSelected([...new Set([...marquee.base, ...hits])]);
+  };
+  // 手のひらツール：ドラッグで編集画面をスクロール
+  const startPan = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!hand && e.button !== 1) return;
+    e.preventDefault();
+    const el = e.currentTarget;
+    panRef.current = {
+      x: e.clientX,
+      y: e.clientY,
+      left: el.scrollLeft,
+      top: el.scrollTop,
+    };
+    setPanning(true);
+    el.setPointerCapture(e.pointerId);
+  };
+  const movePan = (e: React.PointerEvent<HTMLDivElement>) => {
+    const pan = panRef.current;
+    if (!pan) return;
+    e.currentTarget.scrollLeft = pan.left - (e.clientX - pan.x);
+    e.currentTarget.scrollTop = pan.top - (e.clientY - pan.y);
+  };
+  const endPan = () => {
+    panRef.current = null;
+    setPanning(false);
   };
   const dragMove = (e: React.PointerEvent) => {
     const d = dragRef.current;
@@ -1014,6 +1143,13 @@ export default function App() {
           >
             <ZoomIn />
           </Button>
+          <Button
+            onClick={() => setHandMode((v) => !v)}
+            active={hand}
+            title="手のひらツール：ドラッグで画面をスクロール（Space を押しながらでも可）"
+          >
+            <Hand />
+          </Button>
           <Button onClick={() => setFit(true)}>画面に合わせる</Button>
           <Button
             onClick={() => {
@@ -1134,7 +1270,13 @@ export default function App() {
                     }}
                     onDragEnd={() => setListDrag(null)}
                     onClick={(e) =>
-                      setSelected(e.shiftKey ? [...selected, o.id] : [o.id])
+                      setSelected(
+                        e.shiftKey
+                          ? selected.includes(o.id)
+                            ? selected.filter((s) => s !== o.id)
+                            : [...selected, o.id]
+                          : [o.id],
+                      )
                     }
                   >
                     <span className="object-type">
@@ -1210,7 +1352,13 @@ export default function App() {
               </Button>
             </div>
           </div>
-          <div className="canvas-scroller">
+          <div
+            className={`canvas-scroller ${hand ? "hand-mode" : ""} ${panning ? "panning" : ""}`}
+            onPointerDown={startPan}
+            onPointerMove={movePan}
+            onPointerUp={endPan}
+            onPointerCancel={endPan}
+          >
             <div className="ruler-top" style={{ width: pageWidth }}>
               {Array.from(
                 { length: Math.floor(project.paper.width / 10) + 1 },
@@ -1257,7 +1405,10 @@ export default function App() {
                     height:
                       (pageWidth * project.paper.height) / project.paper.width,
                   }}
-                  onPointerDown={() => setSelected([])}
+                  onPointerDown={startMarquee}
+                  onPointerMove={moveMarquee}
+                  onPointerUp={() => setMarquee(null)}
+                  onPointerCancel={() => setMarquee(null)}
                 >
                   <BackgroundCanvas
                     background={showBackground ? project.background : null}
@@ -1381,6 +1532,17 @@ export default function App() {
                 </div>
                 {/* 選択枠とハンドルは用紙の外にはみ出しても操作できるよう、切り抜かれない別レイヤーに描く */}
                 <div className="selection-layer">
+                  {marquee && (
+                    <div
+                      className="marquee"
+                      style={{
+                        left: Math.min(marquee.x1, marquee.x2) * mmScale,
+                        top: Math.min(marquee.y1, marquee.y2) * mmScale,
+                        width: Math.abs(marquee.x2 - marquee.x1) * mmScale,
+                        height: Math.abs(marquee.y2 - marquee.y1) * mmScale,
+                      }}
+                    />
+                  )}
                   {guides.v.map((x) => (
                     <div
                       key={`v${x}`}
@@ -1441,104 +1603,122 @@ export default function App() {
           <div className="right-scroll">
             {selectedObject ? (
               <>
-                <Section title="内容">
-                  <label className="stacked-label">
-                    種類
-                    <select
-                      value={selectedObject.kind}
-                      onChange={(e) =>
-                        updateObject(selectedObject.id, {
-                          kind: e.target.value as TextObject["kind"],
-                        })
-                      }
-                    >
-                      <option value="fixed">固定文字</option>
-                      <option value="merge">差し込み文字</option>
-                    </select>
-                  </label>
-                  <label className="stacked-label">
-                    文字列
-                    <textarea
-                      value={selectedObject.text}
-                      onChange={(e) =>
-                        updateObject(selectedObject.id, {
-                          text: e.target.value,
-                        })
-                      }
-                      rows={5}
-                    />
-                  </label>
-                  <p className="panel-tip">
-                    差し込みには &#123;列名&#125; を使用します。 日付の一部は
-                    &#123;日付:年&#125; &#123;日付:月&#125; &#123;日付:日&#125;
-                    のように指定できます（ほかに 曜日・元号・和暦・西暦）。
-                    「６年」から数字だけを取り出すには &#123;学年:数字&#125;
-                    （半角数字・全角数字 も指定可）を使います。
-                    「○○小学校」の「○○」だけなら &#123;学校名:校名&#125;、
-                    「小学校」だけなら &#123;学校名:種別&#125;、「小」だけなら
-                    &#123;学校名:種別略&#125; です。
-                  </p>
-                </Section>
-                <Section title="位置とサイズ">
+                {multi && (
+                  <div className="multi-note">
+                    <strong>{selectedObjects.length} 個の枠を選択中</strong>
+                    <span>
+                      下の変更は選択中のすべての枠にまとめて反映されます。「混在」は枠ごとに値が違う項目です。
+                    </span>
+                  </div>
+                )}
+                {!multi && (
+                  <Section title="内容">
+                    <label className="stacked-label">
+                      種類
+                      <select
+                        value={shared.kind}
+                        onChange={(e) =>
+                          updateSelected({
+                            kind: e.target.value as TextObject["kind"],
+                          })
+                        }
+                      >
+                        <option value="fixed">固定文字</option>
+                        <option value="merge">差し込み文字</option>
+                      </select>
+                    </label>
+                    <label className="stacked-label">
+                      文字列
+                      <textarea
+                        value={shared.text}
+                        onChange={(e) =>
+                          updateSelected({
+                            text: e.target.value,
+                          })
+                        }
+                        rows={5}
+                      />
+                    </label>
+                    <p className="panel-tip">
+                      差し込みには &#123;列名&#125; を使用します。 日付の一部は
+                      &#123;日付:年&#125; &#123;日付:月&#125;
+                      &#123;日付:日&#125; のように指定できます（ほかに
+                      曜日・元号・和暦・西暦）。
+                      「６年」から数字だけを取り出すには &#123;学年:数字&#125;
+                      （半角数字・全角数字 も指定可）を使います。
+                      「○○小学校」の「○○」だけなら &#123;学校名:校名&#125;、
+                      「小学校」だけなら &#123;学校名:種別&#125;、「小」だけなら
+                      &#123;学校名:種別略&#125; です。
+                    </p>
+                  </Section>
+                )}
+                <Section title={multi ? "サイズ" : "位置とサイズ"}>
                   <div className="two-col">
-                    <NumberInput
-                      label="X 座標"
-                      value={selectedObject.x}
-                      onChange={(x) => updateObject(selectedObject.id, { x })}
-                      suffix="mm"
-                    />
-                    <NumberInput
-                      label="Y 座標"
-                      value={selectedObject.y}
-                      onChange={(y) => updateObject(selectedObject.id, { y })}
-                      suffix="mm"
-                    />
+                    {!multi && (
+                      <>
+                        <NumberInput
+                          label="X 座標"
+                          value={shared.x}
+                          onChange={(x) => updateSelected({ x })}
+                          suffix="mm"
+                        />
+                        <NumberInput
+                          label="Y 座標"
+                          value={shared.y}
+                          onChange={(y) => updateSelected({ y })}
+                          suffix="mm"
+                        />
+                      </>
+                    )}
                     <NumberInput
                       label="幅"
-                      value={selectedObject.width}
-                      onChange={(width) =>
-                        updateObject(selectedObject.id, { width })
-                      }
+                      value={shared.width}
+                      onChange={(width) => updateSelected({ width })}
                       min={1}
                       suffix="mm"
                     />
                     <NumberInput
                       label="高さ"
-                      value={selectedObject.height}
-                      onChange={(height) =>
-                        updateObject(selectedObject.id, { height })
-                      }
+                      value={shared.height}
+                      onChange={(height) => updateSelected({ height })}
                       min={1}
                       suffix="mm"
                     />
                   </div>
-                  <Button
-                    onClick={() =>
-                      updateObject(selectedObject.id, {
-                        x: roundMm(
-                          (project.paper.width - selectedObject.width) / 2,
-                        ),
-                        y: roundMm(
-                          (project.paper.height - selectedObject.height) / 2,
-                        ),
-                      })
-                    }
-                    className="wide"
-                  >
-                    用紙の中央に配置
-                  </Button>
+                  {!multi && (
+                    <Button
+                      onClick={() =>
+                        updateSelected({
+                          x: roundMm(
+                            (project.paper.width - selectedObject.width) / 2,
+                          ),
+                          y: roundMm(
+                            (project.paper.height - selectedObject.height) / 2,
+                          ),
+                        })
+                      }
+                      className="wide"
+                    >
+                      用紙の中央に配置
+                    </Button>
+                  )}
                 </Section>
                 <Section title="文字のスタイル">
                   <label className="stacked-label">
                     フォント
                     <select
-                      value={selectedObject.fontId}
+                      value={shared.fontId ?? ""}
                       onChange={(e) =>
-                        updateObject(selectedObject.id, {
+                        updateSelected({
                           fontId: e.target.value,
                         })
                       }
                     >
+                      {shared.fontId === undefined && (
+                        <option value="" disabled>
+                          （混在）
+                        </option>
+                      )}
                       <option value="serif">Noto Serif CJK JP（明朝）</option>
                       <option value="sans">Noto Sans CJK JP（ゴシック）</option>
                       {project.fonts.map((f) => (
@@ -1563,37 +1743,31 @@ export default function App() {
                   <div className="two-col">
                     <NumberInput
                       label="サイズ"
-                      value={selectedObject.fontSize}
-                      onChange={(fontSize) =>
-                        updateObject(selectedObject.id, { fontSize })
-                      }
+                      value={shared.fontSize}
+                      onChange={(fontSize) => updateSelected({ fontSize })}
                       step={1}
                       min={1}
                       suffix="pt"
                     />
                     <NumberInput
                       label="回転"
-                      value={selectedObject.rotation}
-                      onChange={(rotation) =>
-                        updateObject(selectedObject.id, { rotation })
-                      }
+                      value={shared.rotation}
+                      onChange={(rotation) => updateSelected({ rotation })}
                       step={1}
                       suffix="°"
                     />
                     <NumberInput
                       label="字間"
-                      value={selectedObject.letterSpacing}
+                      value={shared.letterSpacing}
                       onChange={(letterSpacing) =>
-                        updateObject(selectedObject.id, { letterSpacing })
+                        updateSelected({ letterSpacing })
                       }
                       suffix="mm"
                     />
                     <NumberInput
                       label="行間"
-                      value={selectedObject.lineHeight}
-                      onChange={(lineHeight) =>
-                        updateObject(selectedObject.id, { lineHeight })
-                      }
+                      value={shared.lineHeight}
+                      onChange={(lineHeight) => updateSelected({ lineHeight })}
                       step={0.1}
                       min={0.5}
                     />
@@ -1602,9 +1776,9 @@ export default function App() {
                     <span>文字色</span>
                     <input
                       type="color"
-                      value={selectedObject.color}
+                      value={shared.color ?? selectedObject.color}
                       onChange={(e) =>
-                        updateObject(selectedObject.id, {
+                        updateSelected({
                           color: e.target.value,
                         })
                       }
@@ -1612,9 +1786,9 @@ export default function App() {
                     <label>
                       <input
                         type="checkbox"
-                        checked={selectedObject.bold}
+                        checked={shared.bold === true}
                         onChange={(e) =>
-                          updateObject(selectedObject.id, {
+                          updateSelected({
                             bold: e.target.checked,
                           })
                         }
@@ -1626,10 +1800,8 @@ export default function App() {
                     {(["left", "center", "right"] as const).map((a, i) => (
                       <button
                         key={a}
-                        className={selectedObject.align === a ? "active" : ""}
-                        onClick={() =>
-                          updateObject(selectedObject.id, { align: a })
-                        }
+                        className={shared.align === a ? "active" : ""}
+                        onClick={() => updateSelected({ align: a })}
                       >
                         {[<AlignLeft />, <AlignCenter />, <AlignRight />][i]}
                       </button>
@@ -1637,18 +1809,14 @@ export default function App() {
                   </div>
                   <div className="segmented text-segments">
                     <button
-                      className={!selectedObject.vertical ? "active" : ""}
-                      onClick={() =>
-                        updateObject(selectedObject.id, { vertical: false })
-                      }
+                      className={shared.vertical === false ? "active" : ""}
+                      onClick={() => updateSelected({ vertical: false })}
                     >
                       横書き
                     </button>
                     <button
-                      className={selectedObject.vertical ? "active" : ""}
-                      onClick={() =>
-                        updateObject(selectedObject.id, { vertical: true })
-                      }
+                      className={shared.vertical === true ? "active" : ""}
+                      onClick={() => updateSelected({ vertical: true })}
                     >
                       縦書き
                     </button>
