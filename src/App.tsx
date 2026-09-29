@@ -47,8 +47,10 @@ import {
 } from "./localFonts";
 import { createPdf } from "./pdf";
 import {
+  DATE_PARTS,
   makeObject,
   mergeText,
+  parseDate,
   missingFields,
   paperFromPreset,
   roundMm,
@@ -179,6 +181,10 @@ export default function App() {
   const fontQueryId = useRef(0);
   const japaneseFontNameCache = useRef(new Map<string, string>());
   const [pageWidth, setPageWidth] = useState(1000);
+  // レイアウト一覧のドラッグ並べ替え（to は挿入位置）
+  const [listDrag, setListDrag] = useState<{ from: number; to: number } | null>(
+    null,
+  );
   const pageRef = useRef<HTMLDivElement>(null),
     workspaceRef = useRef<HTMLDivElement>(null),
     dragRef = useRef<Drag | null>(null);
@@ -204,6 +210,25 @@ export default function App() {
       objects: p.objects.map((o) => (o.id === id ? { ...o, ...patch } : o)),
     }));
   const selectedObject = project.objects.find((o) => o.id === selected[0]);
+  const dateColumns = useMemo(
+    () =>
+      new Set(
+        project.columns.filter((c) =>
+          project.rows.slice(0, 5).some((r) => parseDate(r[c] ?? "")),
+        ),
+      ),
+    [project.columns, project.rows],
+  );
+  const moveObject = (from: number, to: number) => {
+    const target = to > from ? to - 1 : to;
+    if (target === from) return;
+    change((p) => {
+      const objects = [...p.objects];
+      const [moved] = objects.splice(from, 1);
+      objects.splice(target, 0, moved);
+      return { ...p, objects };
+    });
+  };
   const missing = useMemo(
     () => missingFields(project.objects, project.columns),
     [project.objects, project.columns],
@@ -590,7 +615,6 @@ export default function App() {
     };
   };
   const startDrag = (e: React.PointerEvent, id: string, resize?: string) => {
-    if (preview) return;
     e.stopPropagation();
     const ids = e.shiftKey
       ? selected.includes(id)
@@ -934,19 +958,45 @@ export default function App() {
               <div className="field-list">
                 {project.columns.length ? (
                   project.columns.map((column, i) => (
-                    <button
-                      key={`${column}-${i}`}
-                      draggable
-                      onDragStart={(e) =>
-                        e.dataTransfer.setData("text/plain", column)
-                      }
-                      onClick={() => addText(`{${column}}`, "merge")}
-                      className="field-item"
-                    >
-                      <span className="field-icon">&#123; &#125;</span>
-                      <span>{column}</span>
-                      <span className="field-add">＋</span>
-                    </button>
+                    <div key={`${column}-${i}`} className="field-group">
+                      <button
+                        draggable
+                        onDragStart={(e) =>
+                          e.dataTransfer.setData("text/plain", column)
+                        }
+                        onClick={() => addText(`{${column}}`, "merge")}
+                        className="field-item"
+                      >
+                        <span className="field-icon">&#123; &#125;</span>
+                        <span>{column}</span>
+                        <span className="field-add">＋</span>
+                      </button>
+                      {dateColumns.has(column) && (
+                        <div
+                          className="date-parts"
+                          title="日付の一部だけを差し込みます"
+                        >
+                          {DATE_PARTS.map((part) => (
+                            <button
+                              key={part}
+                              className="date-part"
+                              draggable
+                              onDragStart={(e) =>
+                                e.dataTransfer.setData(
+                                  "text/plain",
+                                  `${column}:${part}`,
+                                )
+                              }
+                              onClick={() =>
+                                addText(`{${column}:${part}}`, "merge")
+                              }
+                            >
+                              {part}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   ))
                 ) : (
                   <p className="empty-note">
@@ -974,7 +1024,30 @@ export default function App() {
                 {project.objects.map((o, i) => (
                   <button
                     key={o.id}
-                    className={`object-list-item ${selected.includes(o.id) ? "selected" : ""}`}
+                    className={`object-list-item ${selected.includes(o.id) ? "selected" : ""} ${listDrag?.from === i ? "dragging" : ""} ${listDrag && listDrag.to === i ? "drop-before" : ""} ${listDrag && listDrag.to === i + 1 && i === project.objects.length - 1 ? "drop-after" : ""}`}
+                    draggable
+                    onDragStart={(e) => {
+                      e.dataTransfer.effectAllowed = "move";
+                      e.dataTransfer.setData("application/x-awardprint-object", o.id);
+                      setListDrag({ from: i, to: i });
+                    }}
+                    onDragOver={(e) => {
+                      if (!listDrag) return;
+                      e.preventDefault();
+                      e.stopPropagation();
+                      const rect = e.currentTarget.getBoundingClientRect();
+                      const to =
+                        e.clientY < rect.top + rect.height / 2 ? i : i + 1;
+                      if (to !== listDrag.to) setListDrag({ ...listDrag, to });
+                    }}
+                    onDrop={(e) => {
+                      if (!listDrag) return;
+                      e.preventDefault();
+                      e.stopPropagation();
+                      moveObject(listDrag.from, listDrag.to);
+                      setListDrag(null);
+                    }}
+                    onDragEnd={() => setListDrag(null)}
                     onClick={(e) =>
                       setSelected(e.shiftKey ? [...selected, o.id] : [o.id])
                     }
@@ -1182,7 +1255,6 @@ export default function App() {
                     >
                       <div className="text-content">{text || " "}</div>
                       {selected.includes(o.id) &&
-                        !preview &&
                         ["nw", "n", "ne", "e", "se", "s", "sw", "w"].map(
                           (handle) => (
                             <span
@@ -1242,6 +1314,9 @@ export default function App() {
                   </label>
                   <p className="panel-tip">
                     差し込みには &#123;列名&#125; を使用します。
+                    日付の一部は &#123;日付:年&#125; &#123;日付:月&#125;
+                    &#123;日付:日&#125; のように指定できます（ほかに
+                    曜日・元号・和暦・西暦）。
                   </p>
                 </Section>
                 <Section title="位置とサイズ">

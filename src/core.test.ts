@@ -54,6 +54,28 @@ describe("paper and merge data", () => {
     project.objects[0].text = "{不存在}";
     expect(missingFields(project.objects, project.columns)).toEqual(["不存在"]);
   });
+  it("splits dates into year, month and day parts", () => {
+    const row = {
+      和暦: "令和8年3月15日",
+      西暦: "2026/03/15",
+      元年: "令和元年5月1日",
+      略記: "Ｒ８．３．１５",
+      名前: "山田",
+    };
+    expect(mergeText("{和暦:元号}{和暦:年}年{和暦:月}月{和暦:日}日", row)).toBe(
+      "令和8年3月15日",
+    );
+    expect(
+      mergeText("{西暦:年}|{西暦:月}|{西暦:日}|{西暦:曜日}|{西暦:和暦}", row),
+    ).toBe("2026|3|15|日|8");
+    expect(mergeText("{元年:年}|{元年:西暦}", row)).toBe("元|2019");
+    expect(mergeText("{略記:西暦}-{略記:月}", row)).toBe("2026-3");
+    expect(mergeText("[{名前:年}]", row)).toBe("[]");
+    expect(mergeText("{a:b}", { "a:b": "x" })).toBe("x");
+    const project = sampleProject();
+    project.objects[0].text = "{日付:年}{不明:月}";
+    expect(missingFields(project.objects, project.columns)).toEqual(["不明"]);
+  });
   it("opens the sample as a fully placed A4 portrait certificate", () => {
     const project = sampleProject();
     expect(project.paper).toMatchObject({

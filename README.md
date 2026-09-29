@@ -37,7 +37,9 @@ npm run test:e2e
 3. Choose **PDF下絵** (PDF template), or drop a PDF onto the editor. Select the template page and adjust its visibility and opacity. The app warns when the PDF size differs from the paper size.
 4. Choose **CSV / Excel** to import a `.csv` or `.xlsx` file. CSV supports UTF-8 and Shift_JIS/Windows-31J. Excel imports support sheet selection, header-row selection, and date formatting.
 5. Click or drag a column name from the left panel onto the page. Edit its text and placement in the right panel. A text box can combine fixed text and fields, for example `{氏名}　殿`. Hold Shift while clicking to select multiple objects. Arrow keys move a selection by 0.1 mm; Shift + arrow keys move it by 1 mm.
-6. Choose **プレビュー** (Preview) to step through recipients. The eye button switches the template display on or off.
+   - To place parts of a date separately, add `:part` to the field: `{日付:年}`, `{日付:月}`, `{日付:日}`, `{日付:曜日}`, `{日付:元号}`, `{日付:和暦}`, `{日付:西暦}`. Date columns show these parts as chips under the column name in the left panel. Both Japanese-era dates (`令和8年3月15日`, `R8.3.15`) and Western dates (`2026/3/15`, `2026年3月15日`) are recognized; `年` keeps the style of the source, and the first year of an era is shown as `元`.
+   - Drag items in the **レイアウト** (Layout) list to reorder them. Items lower in the list are drawn on top.
+6. Choose **プレビュー** (Preview) to step through recipients. The eye button switches the template display on or off. You can still select, move, resize, and edit objects while previewing.
 7. Choose **印刷** (Print) to generate a text-only PDF and open the browser's print dialog. You can print the current record, all records, a range, or rows selected in the data table. **PDF出力** (PDF export) offers a separate confirmation PDF that includes the template.
 8. Choose **レイアウト保存** (Save layout) to download a `.json` project file and **レイアウトを開く** (Open layout) to restore it. The app can also import older `.awardprint` files. Recipient rows are excluded from the saved file by default; you can opt to include them. Project data is not saved to browser storage.
 

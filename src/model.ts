@@ -221,12 +221,113 @@ export function sampleProject(): Project {
     includePersonalData: false,
   };
 }
+// 和暦の元号と開始日（西暦年・月・日）
+const ERAS = [
+  { name: "令和", abbr: "R", start: [2019, 5, 1] },
+  { name: "平成", abbr: "H", start: [1989, 1, 8] },
+  { name: "昭和", abbr: "S", start: [1926, 12, 25] },
+  { name: "大正", abbr: "T", start: [1912, 7, 30] },
+  { name: "明治", abbr: "M", start: [1868, 1, 25] },
+] as const;
+export const DATE_PARTS = [
+  "年",
+  "月",
+  "日",
+  "曜日",
+  "元号",
+  "和暦",
+  "西暦",
+] as const;
+export type DatePart = (typeof DATE_PARTS)[number];
+export type ParsedDate = {
+  year: number;
+  month: number;
+  day: number;
+  era: string;
+  eraYear: number;
+  japaneseSource: boolean;
+};
+export function parseDate(value: string): ParsedDate | null {
+  const s = value.normalize("NFKC").trim();
+  const sep = String.raw`\s*[年./-]\s*`;
+  const jp = new RegExp(
+    String.raw`^(令和|平成|昭和|大正|明治|[RHSTM])\s*(元|\d{1,2})${sep}(\d{1,2})\s*[月./-]\s*(\d{1,2})`,
+    "i",
+  ).exec(s);
+  let year: number, month: number, day: number;
+  if (jp) {
+    const era = ERAS.find(
+      (e) => e.name === jp[1] || e.abbr === jp[1].toUpperCase(),
+    )!;
+    year = era.start[0] + (jp[2] === "元" ? 1 : Number(jp[2])) - 1;
+    month = Number(jp[3]);
+    day = Number(jp[4]);
+  } else {
+    const w = new RegExp(
+      String.raw`^(?:西暦)?\s*(\d{4})${sep}(\d{1,2})\s*[月./-]\s*(\d{1,2})`,
+    ).exec(s);
+    if (!w) return null;
+    year = Number(w[1]);
+    month = Number(w[2]);
+    day = Number(w[3]);
+  }
+  if (month < 1 || month > 12 || day < 1 || day > 31) return null;
+  const key = year * 10000 + month * 100 + day;
+  const era = ERAS.find(
+    (e) => key >= e.start[0] * 10000 + e.start[1] * 100 + e.start[2],
+  );
+  return {
+    year,
+    month,
+    day,
+    era: era?.name ?? "",
+    eraYear: era ? year - era.start[0] + 1 : year,
+    japaneseSource: Boolean(jp),
+  };
+}
+export function datePart(value: string, part: DatePart) {
+  const d = parseDate(value);
+  if (!d) return "";
+  const eraYear = d.eraYear === 1 ? "元" : String(d.eraYear);
+  switch (part) {
+    case "年":
+      return d.japaneseSource ? eraYear : String(d.year);
+    case "月":
+      return String(d.month);
+    case "日":
+      return String(d.day);
+    case "曜日":
+      return "日月火水木金土"[new Date(d.year, d.month - 1, d.day).getDay()];
+    case "元号":
+      return d.era;
+    case "和暦":
+      return eraYear;
+    case "西暦":
+      return String(d.year);
+  }
+}
+// {列名} または {列名:年} のような差し込み指定を列名と日付の部分に分ける
+export function parseField(spec: string): { field: string; part?: DatePart } {
+  const i = spec.lastIndexOf(":");
+  const part = spec.slice(i + 1) as DatePart;
+  return i > 0 && DATE_PARTS.includes(part)
+    ? { field: spec.slice(0, i), part }
+    : { field: spec };
+}
 export const mergeText = (text: string, row: DataRow) =>
-  text.replace(/\{([^{}]+)\}/g, (_, field: string) => row[field] ?? "");
+  text.replace(/\{([^{}]+)\}/g, (_, spec: string) => {
+    const { field, part } = parseField(spec);
+    const value = row[field] ?? "";
+    return part ? datePart(value, part) : value;
+  });
 export const missingFields = (objects: TextObject[], columns: string[]) => [
   ...new Set(
     objects
-      .flatMap((o) => [...o.text.matchAll(/\{([^{}]+)\}/g)].map((m) => m[1]))
+      .flatMap((o) =>
+        [...o.text.matchAll(/\{([^{}]+)\}/g)].map(
+          (m) => parseField(m[1]).field,
+        ),
+      )
       .filter((c) => !columns.includes(c)),
   ),
 ];

@@ -322,6 +322,41 @@ svg {
   border-color: #1e6d97;
   background: #eaf4fa;
 }
+.object-list-item {
+  cursor: grab;
+}
+.object-list-item.dragging {
+  opacity: 0.45;
+}
+.object-list-item.drop-before {
+  box-shadow: 0 -3px 0 #2680aa;
+}
+.object-list-item.drop-after {
+  box-shadow: 0 3px 0 #2680aa;
+}
+.field-group {
+  display: grid;
+  gap: 4px;
+}
+.date-parts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding-left: 22px;
+}
+.date-part {
+  border: 1px solid #cfe6e3;
+  background: #f3faf9;
+  color: #168d83;
+  border-radius: 4px;
+  padding: 2px 7px;
+  font-size: 11px;
+  cursor: grab;
+}
+.date-part:hover {
+  border-color: #168d83;
+  background: #e5f3f2;
+}
 .source-box {
   display: flex;
   gap: 10px;
