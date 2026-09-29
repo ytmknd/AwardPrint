@@ -32,7 +32,7 @@ npm run test:e2e
 
 ## How to use
 
-1. The app opens with an A4 portrait sample certificate and three sample recipients. Choose **新規** (New) to start with an empty layout.
+1. The app opens with an A4 portrait sample layout for certificate paper that already has "school, grade, date" printed on it: school name and grade number, recipient name, era year / month / day as separate fields, and a placeholder signer name (`○○　○○`). Three sample recipients are loaded. Choose **新規** (New) to start with an empty layout.
 2. Choose **用紙設定** (Paper settings) to select A3, A4, A5, JIS B4, JIS B5, postcard, or a custom size in millimetres. Set orientation and printer X/Y offsets there.
 3. Choose **PDF下絵** (PDF template), or drop a PDF onto the editor. Select the template page and adjust its visibility and opacity. The app warns when the PDF size differs from the paper size.
 4. Choose **CSV / Excel** to import a `.csv` or `.xlsx` file. CSV supports UTF-8 and Shift_JIS/Windows-31J. Excel imports support sheet selection, header-row selection, and date formatting.
