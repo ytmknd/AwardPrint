@@ -321,14 +321,27 @@ export function numberPart(value: string, part: NumberPart) {
 }
 export const hasNumberWithText = (value: string) =>
   /[0-9０-９]/.test(value) && /[^0-9０-９\s]/.test(value);
-type FieldPart = DatePart | NumberPart;
+// 「○○小学校」を「○○」（校名）と「小学校」（種別）に分ける
+export const SCHOOL_PARTS = ["校名", "種別"] as const;
+export type SchoolPart = (typeof SCHOOL_PARTS)[number];
+const SCHOOL_SUFFIX =
+  /(義務教育学校|中等教育学校|特別支援学校|高等専門学校|高等学校|小学校|中学校|高校|幼稚園|保育園|保育所|こども園|学校)\s*$/;
+export const isSchoolName = (value: string) => SCHOOL_SUFFIX.test(value.trim());
+export function schoolPart(value: string, part: SchoolPart) {
+  const v = value.trim();
+  const m = SCHOOL_SUFFIX.exec(v);
+  if (part === "種別") return m?.[1] ?? "";
+  return m ? v.slice(0, m.index).trim() : v;
+}
+type FieldPart = DatePart | NumberPart | SchoolPart;
 // {列名} または {列名:年} {列名:数字} のような差し込み指定を列名と部分に分ける
 export function parseField(spec: string): { field: string; part?: FieldPart } {
   const i = spec.lastIndexOf(":");
   const part = spec.slice(i + 1) as FieldPart;
   return i > 0 &&
     (DATE_PARTS.includes(part as DatePart) ||
-      NUMBER_PARTS.includes(part as NumberPart))
+      NUMBER_PARTS.includes(part as NumberPart) ||
+      SCHOOL_PARTS.includes(part as SchoolPart))
     ? { field: spec.slice(0, i), part }
     : { field: spec };
 }
@@ -337,9 +350,11 @@ export const mergeText = (text: string, row: DataRow) =>
     const { field, part } = parseField(spec);
     const value = row[field] ?? "";
     if (!part) return value;
-    return NUMBER_PARTS.includes(part as NumberPart)
-      ? numberPart(value, part as NumberPart)
-      : datePart(value, part as DatePart);
+    if (NUMBER_PARTS.includes(part as NumberPart))
+      return numberPart(value, part as NumberPart);
+    if (SCHOOL_PARTS.includes(part as SchoolPart))
+      return schoolPart(value, part as SchoolPart);
+    return datePart(value, part as DatePart);
   });
 export const missingFields = (objects: TextObject[], columns: string[]) => [
   ...new Set(

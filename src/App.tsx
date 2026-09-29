@@ -49,7 +49,9 @@ import { createPdf } from "./pdf";
 import {
   DATE_PARTS,
   hasNumberWithText,
+  isSchoolName,
   makeObject,
+  SCHOOL_PARTS,
   mergeText,
   parseDate,
   missingFields,
@@ -222,6 +224,7 @@ export default function App() {
     for (const c of project.columns) {
       const values = project.rows.slice(0, 5).map((r) => r[c] ?? "");
       if (values.some((v) => parseDate(v))) parts.set(c, DATE_PARTS);
+      else if (values.some(isSchoolName)) parts.set(c, SCHOOL_PARTS);
       else if (values.some(hasNumberWithText)) parts.set(c, ["数字"]);
     }
     return parts;
@@ -1393,6 +1396,8 @@ export default function App() {
                     のように指定できます（ほかに 曜日・元号・和暦・西暦）。
                     「６年」から数字だけを取り出すには &#123;学年:数字&#125;
                     （半角数字・全角数字 も指定可）を使います。
+                    「○○小学校」の「○○」だけなら &#123;学校名:校名&#125;、
+                    「小学校」だけなら &#123;学校名:種別&#125; です。
                   </p>
                 </Section>
                 <Section title="位置とサイズ">

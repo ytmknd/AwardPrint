@@ -84,6 +84,19 @@ describe("paper and merge data", () => {
     project.objects[0].text = "{学年:数字}";
     expect(missingFields(project.objects, project.columns)).toEqual([]);
   });
+  it("splits school names into name and school type", () => {
+    const row = {
+      a: "西条小学校",
+      b: "丹原東中学校 ",
+      c: "今治特別支援学校",
+      d: "西条教育委員会",
+    };
+    expect(mergeText("{a:校名}|{a:種別}|{b:校名}|{b:種別}", row)).toBe(
+      "西条|小学校|丹原東|中学校",
+    );
+    expect(mergeText("{c:校名}|{c:種別}", row)).toBe("今治|特別支援学校");
+    expect(mergeText("{d:校名}|{d:種別}", row)).toBe("西条教育委員会|");
+  });
   it("opens the sample as a fully placed A4 portrait certificate", () => {
     const project = sampleProject();
     expect(project.paper).toMatchObject({
