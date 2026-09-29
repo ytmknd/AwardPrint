@@ -1028,7 +1028,10 @@ export default function App() {
                     draggable
                     onDragStart={(e) => {
                       e.dataTransfer.effectAllowed = "move";
-                      e.dataTransfer.setData("application/x-awardprint-object", o.id);
+                      e.dataTransfer.setData(
+                        "application/x-awardprint-object",
+                        o.id,
+                      );
                       setListDrag({ from: i, to: i });
                     }}
                     onDragOver={(e) => {
@@ -1163,110 +1166,134 @@ export default function App() {
                   ),
                 )}
               </div>
-              <div
-                className="paper"
-                ref={pageRef}
-                style={{
-                  width: pageWidth,
-                  height:
-                    (pageWidth * project.paper.height) / project.paper.width,
-                }}
-                onPointerDown={() => setSelected([])}
-              >
-                <BackgroundCanvas
-                  background={showBackground ? project.background : null}
-                  width={pageWidth}
-                  height={
-                    (pageWidth * project.paper.height) / project.paper.width
-                  }
-                />
-                {project.grid && (
-                  <div
-                    className="grid-overlay"
-                    style={{
-                      backgroundSize: `${5 * mmScale}px ${5 * mmScale}px`,
-                    }}
+              <div className="paper-frame">
+                <div
+                  className="paper"
+                  ref={pageRef}
+                  style={{
+                    width: pageWidth,
+                    height:
+                      (pageWidth * project.paper.height) / project.paper.width,
+                  }}
+                  onPointerDown={() => setSelected([])}
+                >
+                  <BackgroundCanvas
+                    background={showBackground ? project.background : null}
+                    width={pageWidth}
+                    height={
+                      (pageWidth * project.paper.height) / project.paper.width
+                    }
                   />
-                )}
-                {project.guides && (
-                  <>
-                    <div className="center-guide vertical-guide" />
-                    <div className="center-guide horizontal-guide" />
-                  </>
-                )}
-                {project.objects.map((o) => {
-                  const text = preview ? mergeText(o.text, currentRow) : o.text;
-                  const maxChars = Math.max(
-                    1,
-                    Math.floor((o.width * 2.835) / (o.fontSize * 0.9)),
-                  );
-                  const lineCount = text
-                    .split("\n")
-                    .reduce(
-                      (sum, line) =>
-                        sum + Math.max(1, Math.ceil(line.length / maxChars)),
-                      0,
-                    );
-                  const overflow = o.vertical
-                    ? (text.length * o.fontSize) / 2.835 >
-                      o.height *
-                        Math.max(
-                          1,
-                          Math.floor(
-                            (o.width * 2.835) / (o.fontSize * o.lineHeight),
-                          ),
-                        )
-                    : (lineCount * o.fontSize * o.lineHeight) / 2.835 >
-                      o.height + 3;
-                  return (
+                  {project.grid && (
                     <div
-                      key={o.id}
-                      className={`text-object ${selected.includes(o.id) ? "text-selected" : ""} ${overflow ? "text-overflow" : ""}`}
+                      className="grid-overlay"
                       style={{
-                        left: o.x * mmScale,
-                        top: o.y * mmScale,
-                        width: o.width * mmScale,
-                        height: o.height * mmScale,
-                        fontFamily:
-                          o.fontId === "serif"
-                            ? "Noto Serif CJK JP"
-                            : o.fontId === "sans"
-                              ? "Noto Sans CJK JP"
-                              : o.fontId,
-                        fontSize: (o.fontSize * mmScale * 25.4) / 72,
-                        color: o.color,
-                        fontWeight: o.bold ? 700 : 400,
-                        textAlign: o.align,
-                        lineHeight: o.lineHeight,
-                        letterSpacing: `${o.letterSpacing * mmScale}px`,
-                        writingMode: o.vertical
-                          ? "vertical-rl"
-                          : "horizontal-tb",
-                        transform: `rotate(${o.rotation}deg)`,
+                        backgroundSize: `${5 * mmScale}px ${5 * mmScale}px`,
                       }}
-                      title={
-                        overflow
-                          ? "文字が領域を超える可能性があります"
-                          : undefined
-                      }
-                      onPointerDown={(e) => startDrag(e, o.id)}
-                      onPointerMove={dragMove}
-                      onPointerUp={endDrag}
-                    >
-                      <div className="text-content">{text || " "}</div>
-                      {selected.includes(o.id) &&
-                        ["nw", "n", "ne", "e", "se", "s", "sw", "w"].map(
+                    />
+                  )}
+                  {project.guides && (
+                    <>
+                      <div className="center-guide vertical-guide" />
+                      <div className="center-guide horizontal-guide" />
+                    </>
+                  )}
+                  {project.objects.map((o) => {
+                    const text = preview
+                      ? mergeText(o.text, currentRow)
+                      : o.text;
+                    const maxChars = Math.max(
+                      1,
+                      Math.floor((o.width * 2.835) / (o.fontSize * 0.9)),
+                    );
+                    const lineCount = text
+                      .split("\n")
+                      .reduce(
+                        (sum, line) =>
+                          sum + Math.max(1, Math.ceil(line.length / maxChars)),
+                        0,
+                      );
+                    const overflow = o.vertical
+                      ? (text.length * o.fontSize) / 2.835 >
+                        o.height *
+                          Math.max(
+                            1,
+                            Math.floor(
+                              (o.width * 2.835) / (o.fontSize * o.lineHeight),
+                            ),
+                          )
+                      : (lineCount * o.fontSize * o.lineHeight) / 2.835 >
+                        o.height + 3;
+                    return (
+                      <div
+                        key={o.id}
+                        className={`text-object ${selected.includes(o.id) ? "text-selected" : ""} ${overflow ? "text-overflow" : ""}`}
+                        style={{
+                          left: o.x * mmScale,
+                          top: o.y * mmScale,
+                          width: o.width * mmScale,
+                          height: o.height * mmScale,
+                          fontFamily:
+                            o.fontId === "serif"
+                              ? "Noto Serif CJK JP"
+                              : o.fontId === "sans"
+                                ? "Noto Sans CJK JP"
+                                : o.fontId,
+                          fontSize: (o.fontSize * mmScale * 25.4) / 72,
+                          color: o.color,
+                          fontWeight: o.bold ? 700 : 400,
+                          textAlign: o.align,
+                          lineHeight: o.lineHeight,
+                          letterSpacing: `${o.letterSpacing * mmScale}px`,
+                          writingMode: o.vertical
+                            ? "vertical-rl"
+                            : "horizontal-tb",
+                          transform: `rotate(${o.rotation}deg)`,
+                        }}
+                        title={
+                          overflow
+                            ? "文字が領域を超える可能性があります"
+                            : undefined
+                        }
+                        onPointerDown={(e) => startDrag(e, o.id)}
+                        onPointerMove={dragMove}
+                        onPointerUp={endDrag}
+                      >
+                        <div className="text-content">{text || " "}</div>
+                      </div>
+                    );
+                  })}
+                </div>
+                {/* 選択枠とハンドルは用紙の外にはみ出しても操作できるよう、切り抜かれない別レイヤーに描く */}
+                <div className="selection-layer">
+                  {project.objects
+                    .filter((o) => selected.includes(o.id))
+                    .map((o) => (
+                      <div
+                        key={o.id}
+                        className="selection-box"
+                        style={{
+                          left: o.x * mmScale,
+                          top: o.y * mmScale,
+                          width: o.width * mmScale,
+                          height: o.height * mmScale,
+                          transform: `rotate(${o.rotation}deg)`,
+                        }}
+                      >
+                        {["nw", "n", "ne", "e", "se", "s", "sw", "w"].map(
                           (handle) => (
                             <span
                               key={handle}
                               className={`resize-handle handle-${handle}`}
                               onPointerDown={(e) => startDrag(e, o.id, handle)}
+                              onPointerMove={dragMove}
+                              onPointerUp={endDrag}
                             />
                           ),
                         )}
-                    </div>
-                  );
-                })}
+                      </div>
+                    ))}
+                </div>
               </div>
             </div>
             <div className="canvas-caption">
@@ -1313,10 +1340,9 @@ export default function App() {
                     />
                   </label>
                   <p className="panel-tip">
-                    差し込みには &#123;列名&#125; を使用します。
-                    日付の一部は &#123;日付:年&#125; &#123;日付:月&#125;
-                    &#123;日付:日&#125; のように指定できます（ほかに
-                    曜日・元号・和暦・西暦）。
+                    差し込みには &#123;列名&#125; を使用します。 日付の一部は
+                    &#123;日付:年&#125; &#123;日付:月&#125; &#123;日付:日&#125;
+                    のように指定できます（ほかに 曜日・元号・和暦・西暦）。
                   </p>
                 </Section>
                 <Section title="位置とサイズ">
