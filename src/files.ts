@@ -1,4 +1,5 @@
 import ExcelJS from "exceljs";
+import JSZip from "jszip";
 import Papa from "papaparse";
 import { parseDate, type DataRow, type FontAsset, type Project } from "./model";
 
@@ -45,9 +46,67 @@ export async function readCsv(
   };
 }
 export type SheetData = { name: string; rows: unknown[][] };
+// 日本語版Excelの組み込み日付書式（書式番号だけが保存され、書式文字列はファイルに入らない）。
+// ExcelJSはこれらの中身を持たず書式が消えてシリアル値になるため、読み込み前に書き足す。
+const GGGE = '[$-411]ggge"年"m"月"d"日"',
+  GE = "[$-411]ge.m.d",
+  YM = 'yyyy"年"m"月"',
+  MD = 'm"月"d"日"';
+const JA_BUILTIN_DATE_FORMATS: Record<number, string> = {
+  27: GE,
+  28: GGGE,
+  29: GGGE,
+  30: "m/d/yy",
+  31: 'yyyy"年"m"月"d"日"',
+  34: YM,
+  35: MD,
+  36: GE,
+  50: GE,
+  51: GGGE,
+  52: YM,
+  53: MD,
+  54: GGGE,
+  55: YM,
+  56: MD,
+  57: GE,
+  58: GGGE,
+};
+const escapeXml = (s: string) =>
+  s.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
+export async function addBuiltinDateFormats(
+  buffer: ArrayBuffer,
+): Promise<ArrayBuffer> {
+  const zip = await JSZip.loadAsync(buffer);
+  const entry = zip.file("xl/styles.xml");
+  if (!entry) return buffer;
+  const xml = await entry.async("string");
+  const ids = (re: RegExp) =>
+    new Set([...xml.matchAll(re)].map((m) => Number(m[1])));
+  const used = ids(/numFmtId="(\d+)"/g);
+  const defined = ids(/<numFmt\b[^>]*numFmtId="(\d+)"/g);
+  const missing = [...used].filter(
+    (id) => JA_BUILTIN_DATE_FORMATS[id] && !defined.has(id),
+  );
+  if (!missing.length) return buffer;
+  const added = missing
+    .map(
+      (id) =>
+        `<numFmt numFmtId="${id}" formatCode="${escapeXml(JA_BUILTIN_DATE_FORMATS[id])}"/>`,
+    )
+    .join("");
+  const patched = /<numFmts\b[^>]*\/>/.test(xml)
+    ? xml.replace(/<numFmts\b[^>]*\/>/, `<numFmts>${added}</numFmts>`)
+    : /<\/numFmts>/.test(xml)
+      ? xml.replace("</numFmts>", `${added}</numFmts>`)
+      : xml.replace(/(<styleSheet\b[^>]*>)/, `$1<numFmts>${added}</numFmts>`);
+  zip.file("xl/styles.xml", patched);
+  return zip.generateAsync({ type: "arraybuffer" });
+}
 export async function readWorkbook(file: File): Promise<SheetData[]> {
   const workbook = new ExcelJS.Workbook();
-  await workbook.xlsx.load(await file.arrayBuffer());
+  await workbook.xlsx.load(
+    await addBuiltinDateFormats(await file.arrayBuffer()),
+  );
   return workbook.worksheets.map((sheet) => ({
     name: sheet.name,
     rows: Array.from({ length: sheet.rowCount }, (_, i) => {

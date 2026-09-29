@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { readFile } from "node:fs/promises";
 import { PDFArray, PDFDict, PDFDocument, PDFName, PDFRawStream } from "pdf-lib";
 import ExcelJS from "exceljs";
+import JSZip from "jszip";
 import { createPdf } from "./pdf";
 import {
   parseProjectJson,
@@ -159,6 +160,37 @@ describe("data import", () => {
     const parsed = sheetToRows(sheets[0], 1, "japaneseWeekday");
     expect(parsed.rows[0].日付).toBe("令和8年3月15日（日）");
     expect(parsed.rows[0].学籍番号).toBe("0012");
+  });
+  it("reads dates stored with Japanese Excel built-in format IDs", async () => {
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet("受賞者");
+    sheet.addRow(["和暦", "西暦", "数値"]);
+    const row = sheet.addRow([46296, 46296, 46296]);
+    row.getCell(1).numFmt = "WAREKI";
+    row.getCell(2).numFmt = "SEIREKI";
+    // 日本語版Excelが保存したファイルと同じく、書式番号 58 / 31 だけを残して書式文字列を消す
+    const zip = await JSZip.loadAsync(await workbook.xlsx.writeBuffer());
+    let styles = await zip.file("xl/styles.xml")!.async("string");
+    const idOf = (code: string) =>
+      new RegExp(`numFmtId="(\\d+)" formatCode="${code}"`).exec(styles)![1];
+    const wareki = idOf("WAREKI"),
+      seireki = idOf("SEIREKI");
+    styles = styles
+      .replace(/<numFmt [^>]*\/>/g, "")
+      .replaceAll(`numFmtId="${wareki}"`, 'numFmtId="58"')
+      .replaceAll(`numFmtId="${seireki}"`, 'numFmtId="31"');
+    zip.file("xl/styles.xml", styles);
+    const bytes = await zip.generateAsync({ type: "arraybuffer" });
+    const sheets = await readWorkbook(new File([bytes], "builtin.xlsx"));
+    const parsed = sheetToRows(sheets[0], 1, "japanese");
+    expect(parsed.rows[0]).toEqual({
+      和暦: "令和8年10月1日",
+      西暦: "令和8年10月1日",
+      数値: "46296",
+    });
+    expect(
+      mergeText("{和暦:元号}{和暦:年}|{和暦:月}|{和暦:日}", parsed.rows[0]),
+    ).toBe("令和8|10|1");
   });
   it("reads Japanese-era formatted Excel dates instead of serial numbers", async () => {
     const workbook = new ExcelJS.Workbook();
