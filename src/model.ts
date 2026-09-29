@@ -140,7 +140,8 @@ export function makeObject(
     fontId: "serif",
     fontSize: 24,
     color: "#20232d",
-    bold: false,
+    // 賞状用紙に印字済みの項目名（太めの明朝体）に合わせて既定は太字
+    bold: true,
     align: "center",
     lineHeight: 1.4,
     letterSpacing: 0,
