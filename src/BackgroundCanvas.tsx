@@ -4,6 +4,9 @@ import workerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import { base64ToBytes } from "./files";
 import type { Background } from "./model";
 pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
+// ブラウザの canvas 上限（Chrome/Safari の安全側）
+const MAX_CANVAS_SIDE = 8192;
+const MAX_CANVAS_PIXELS = 16_000_000;
 export async function inspectPdf(data: string, pageNumber = 1) {
   const doc = await pdfjs.getDocument({ data: base64ToBytes(data) }).promise;
   const page = await doc.getPage(pageNumber);
@@ -39,12 +42,18 @@ export function BackgroundCanvas({
         doc = await pdfjs.getDocument({ data: base64ToBytes(background.data) })
           .promise;
         const page = await doc.getPage(background.page);
-        const viewport = page.getViewport({
-          scale: Math.min(
-            2,
-            Math.max(width / page.view[2], height / page.view[3]),
-          ),
-        });
+        // 表示サイズ×画素密度で描画する。小さいページ（例: 45mm角）でも
+        // ぼやけないよう倍率に固定上限は設けず、canvas の上限だけ守る
+        const base = page.getViewport({ scale: 1 });
+        const want =
+          Math.max(width / base.width, height / base.height) *
+          (window.devicePixelRatio || 1);
+        const limit = Math.min(
+          MAX_CANVAS_SIDE / base.width,
+          MAX_CANVAS_SIDE / base.height,
+          Math.sqrt(MAX_CANVAS_PIXELS / (base.width * base.height)),
+        );
+        const viewport = page.getViewport({ scale: Math.min(want, limit) });
         const canvas = ref.current;
         if (!canvas || canceled) return;
         canvas.width = Math.round(viewport.width);
