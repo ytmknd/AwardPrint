@@ -12,6 +12,7 @@ import {
   sheetToRows,
 } from "./files";
 import {
+  alignTo,
   mergeText,
   missingFields,
   mmToPt,
@@ -98,6 +99,21 @@ describe("paper and merge data", () => {
     expect(mergeText("{c:校名}|{c:種別}", row)).toBe("今治|特別支援学校");
     expect(mergeText("{d:校名}|{d:種別}", row)).toBe("西条教育委員会|");
     expect(mergeText("{a:種別略}|{b:種別略}|{d:種別略}", row)).toBe("小|中|");
+  });
+  it("snaps dragged edges to the nearest guide within tolerance", () => {
+    // 左端 49 → 50 に吸着、中央・右端は該当なし
+    expect(alignTo([49, 59, 69], [0, 50, 105, 210], 2)).toEqual({
+      delta: 1,
+      lines: [50],
+    });
+    // 中央 104 → 用紙中央 105 のほうが近い
+    expect(alignTo([97.5, 104, 110.5], [0, 99, 105, 210], 2)).toEqual({
+      delta: 1,
+      lines: [105],
+    });
+    // 同じずれ量で左右とも揃う場合は両方のガイドを出す
+    expect(alignTo([10, 20, 30], [11, 31], 2)?.lines).toEqual([11, 31]);
+    expect(alignTo([40], [0, 50], 2)).toBeNull();
   });
   it("opens the sample as a fully placed A4 portrait certificate", () => {
     const project = sampleProject();

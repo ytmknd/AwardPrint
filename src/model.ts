@@ -94,6 +94,32 @@ export function paperFromPreset(
         : Math.max(short, long),
   };
 }
+// ドラッグ中の枠の辺・中心（edges）を、用紙や他の枠の辺・中心（targets）に吸着させる。
+// 許容範囲内で最も近いものへのずれ量と、揃ったガイド線の位置を返す。
+export function alignTo(
+  edges: number[],
+  targets: number[],
+  tolerance: number,
+): { delta: number; lines: number[] } | null {
+  let best: number | null = null;
+  for (const e of edges)
+    for (const t of targets) {
+      const diff = t - e;
+      if (
+        Math.abs(diff) <= tolerance &&
+        (best === null || Math.abs(diff) < Math.abs(best))
+      )
+        best = diff;
+    }
+  if (best === null) return null;
+  const delta = best;
+  const lines = [
+    ...new Set(
+      targets.filter((t) => edges.some((e) => Math.abs(e + delta - t) < 0.05)),
+    ),
+  ];
+  return { delta, lines };
+}
 export const mmToPt = (mm: number) => (mm * 72) / 25.4;
 export const ptToMm = (pt: number) => (pt * 25.4) / 72;
 export const roundMm = (n: number) => Math.round(n * 10) / 10;

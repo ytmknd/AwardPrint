@@ -588,6 +588,23 @@ svg {
   pointer-events: none;
   z-index: 4;
 }
+.smart-guide {
+  position: absolute;
+  pointer-events: none;
+  background: #e0368c;
+}
+.smart-guide-v {
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  margin-left: -0.5px;
+}
+.smart-guide-h {
+  left: 0;
+  right: 0;
+  height: 1px;
+  margin-top: -0.5px;
+}
 .selection-box {
   position: absolute;
   box-sizing: border-box;

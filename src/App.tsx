@@ -47,6 +47,7 @@ import {
 } from "./localFonts";
 import { createPdf } from "./pdf";
 import {
+  alignTo,
   DATE_PARTS,
   hasNumberWithText,
   isSchoolName,
@@ -65,6 +66,10 @@ import {
 
 type Dialog =
   "paper" | "data" | "print" | "export" | "open" | "fonts" | "help" | null;
+// スマートガイド（mm 単位の縦線 v・横線 h）と、吸着し始める距離（画面上の px）
+type Guides = { v: number[]; h: number[] };
+const NO_GUIDES: Guides = { v: [], h: [] };
+const GUIDE_SNAP_PX = 6;
 type Drag = {
   ids: string[];
   startX: number;
@@ -193,6 +198,7 @@ export default function App() {
     null,
   );
   const cancelEditing = useRef(false);
+  const [guides, setGuides] = useState<Guides>(NO_GUIDES);
   const pageRef = useRef<HTMLDivElement>(null),
     workspaceRef = useRef<HTMLDivElement>(null),
     dragRef = useRef<Drag | null>(null);
@@ -654,35 +660,93 @@ export default function App() {
   const dragMove = (e: React.PointerEvent) => {
     const d = dragRef.current;
     if (!d) return;
-    const dx = (e.clientX - d.startX) / mmScale,
+    let dx = (e.clientX - d.startX) / mmScale,
       dy = (e.clientY - d.startY) / mmScale;
-    const snap = (v: number) =>
+    const grid = (v: number) =>
       project.snap ? Math.round(v / 5) * 5 : roundMm(v);
+    const exact = (v: number) => Math.round(v * 100) / 100;
+    let snapX = grid,
+      snapY = grid;
+    const left = d.resize?.includes("w") ?? false,
+      right = d.resize?.includes("e") ?? false,
+      top = d.resize?.includes("n") ?? false,
+      bottom = d.resize?.includes("s") ?? false;
+    // スマートガイド：用紙の端・中央、他の枠の端・中央に揃える（Alt を押している間は無効）
+    const found: Guides = { v: [], h: [] };
+    if (!e.altKey && (!d.resize || d.original.length === 1)) {
+      const { width: W, height: H } = project.paper;
+      const others = project.objects.filter((o) => !d.ids.includes(o.id));
+      const xs = [
+        0,
+        W / 2,
+        W,
+        ...others.flatMap((o) => [o.x, o.x + o.width / 2, o.x + o.width]),
+      ];
+      const ys = [
+        0,
+        H / 2,
+        H,
+        ...others.flatMap((o) => [o.y, o.y + o.height / 2, o.y + o.height]),
+      ];
+      const x1 = Math.min(...d.original.map((o) => o.x)),
+        x2 = Math.max(...d.original.map((o) => o.x + o.width)),
+        y1 = Math.min(...d.original.map((o) => o.y)),
+        y2 = Math.max(...d.original.map((o) => o.y + o.height));
+      // ドラッグで動く辺（移動なら左・中央・右すべて、サイズ変更ならつまんだ辺だけ）
+      const xEdges = d.resize
+        ? [...(left ? [x1] : []), ...(right ? [x2] : [])]
+        : [x1, (x1 + x2) / 2, x2];
+      const yEdges = d.resize
+        ? [...(top ? [y1] : []), ...(bottom ? [y2] : [])]
+        : [y1, (y1 + y2) / 2, y2];
+      const tolerance = GUIDE_SNAP_PX / mmScale;
+      const sx = alignTo(
+        xEdges.map((v) => v + dx),
+        xs,
+        tolerance,
+      );
+      const sy = alignTo(
+        yEdges.map((v) => v + dy),
+        ys,
+        tolerance,
+      );
+      if (sx) {
+        dx += sx.delta;
+        snapX = exact;
+        found.v = sx.lines;
+      }
+      if (sy) {
+        dy += sy.delta;
+        snapY = exact;
+        found.h = sy.lines;
+      }
+    }
+    setGuides(found);
     setProject((p) => ({
       ...p,
       objects: p.objects.map((o) => {
         const old = d.original.find((item) => item.id === o.id);
         if (!old) return o;
         if (!d.resize)
-          return { ...o, x: snap(old.x + dx), y: snap(old.y + dy) };
-        const left = d.resize.includes("w"),
-          right = d.resize.includes("e"),
-          top = d.resize.includes("n"),
-          bottom = d.resize.includes("s");
-        const nx = left ? snap(old.x + dx) : old.x,
-          ny = top ? snap(old.y + dy) : old.y;
+          return { ...o, x: snapX(old.x + dx), y: snapY(old.y + dy) };
+        const nx = left ? snapX(old.x + dx) : old.x,
+          ny = top ? snapY(old.y + dy) : old.y;
         return {
           ...o,
           x: nx,
           y: ny,
-          width: Math.max(1, snap(old.width + (right ? dx : left ? -dx : 0))),
-          height: Math.max(1, snap(old.height + (bottom ? dy : top ? -dy : 0))),
+          width: Math.max(1, snapX(old.width + (right ? dx : left ? -dx : 0))),
+          height: Math.max(
+            1,
+            snapY(old.height + (bottom ? dy : top ? -dy : 0)),
+          ),
         };
       }),
     }));
   };
   const endDrag = () => {
     const d = dragRef.current;
+    setGuides(NO_GUIDES);
     if (!d) return;
     const changed = project.objects.some((o) => {
       const old = d.original.find((x) => x.id === o.id);
@@ -1317,6 +1381,20 @@ export default function App() {
                 </div>
                 {/* 選択枠とハンドルは用紙の外にはみ出しても操作できるよう、切り抜かれない別レイヤーに描く */}
                 <div className="selection-layer">
+                  {guides.v.map((x) => (
+                    <div
+                      key={`v${x}`}
+                      className="smart-guide smart-guide-v"
+                      style={{ left: x * mmScale }}
+                    />
+                  ))}
+                  {guides.h.map((y) => (
+                    <div
+                      key={`h${y}`}
+                      className="smart-guide smart-guide-h"
+                      style={{ top: y * mmScale }}
+                    />
+                  ))}
                   {project.objects
                     .filter((o) => selected.includes(o.id))
                     .map((o) => (
