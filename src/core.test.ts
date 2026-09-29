@@ -340,7 +340,7 @@ describe("PDF output", () => {
       const font = fontkit.create(bytes);
       for (const char of drawn) {
         const glyph = font.glyphForCodePoint(char.codePointAt(0)!);
-        if (glyph.id !== 0 && glyph.path.commands.length > 0) covered.add(char);
+        if (glyph.id !== 0 && glyph.path.toSVG().length > 0) covered.add(char);
       }
     }
     expect([...drawn].filter((char) => !covered.has(char))).toEqual([]);
