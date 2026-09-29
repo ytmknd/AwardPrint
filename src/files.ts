@@ -1,6 +1,6 @@
 import ExcelJS from "exceljs";
 import Papa from "papaparse";
-import type { DataRow, FontAsset, Project } from "./model";
+import { parseDate, type DataRow, type FontAsset, type Project } from "./model";
 
 export async function fileToBase64(file: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -54,8 +54,14 @@ export async function readWorkbook(file: File): Promise<SheetData[]> {
       const row = sheet.getRow(i + 1);
       return Array.from({ length: sheet.columnCount }, (_, c) => {
         const cell = row.getCell(c + 1);
-        const value = cell.value;
+        let value = cell.value;
+        // 数式セルは計算結果を使う
+        if (value && typeof value === "object" && "result" in value)
+          value = (value.result ?? "") as ExcelJS.CellValue;
         if (value instanceof Date) return value;
+        // 和暦書式（ggge年m月d日 など）はExcelJSが日付と判定せずシリアル値になるため自前で変換する
+        if (typeof value === "number" && isDateFormat(cell.numFmt))
+          return serialToDate(value, workbook.properties.date1904);
         if (typeof value === "number" && /^0+$/.test(cell.numFmt))
           return String(value).padStart(cell.numFmt.length, "0");
         return cell.text || value || "";
@@ -63,17 +69,32 @@ export async function readWorkbook(file: File): Promise<SheetData[]> {
     }),
   }));
 }
+export function isDateFormat(numFmt: string | undefined): boolean {
+  if (!numFmt) return false;
+  const fmt = numFmt
+    .replace(/"[^"]*"/g, "")
+    .replace(/\[[^\]]*\]/g, "")
+    .replace(/\\./g, "")
+    .replace(/General/gi, "")
+    .replace(/E[+-]/gi, "");
+  return /[ydge]/i.test(fmt);
+}
+export function serialToDate(serial: number, date1904 = false): Date {
+  const utc = new Date(
+    Date.UTC(date1904 ? 1904 : 1899, date1904 ? 0 : 11, date1904 ? 1 : 30) +
+      Math.floor(serial) * 86_400_000,
+  );
+  return new Date(utc.getUTCFullYear(), utc.getUTCMonth(), utc.getUTCDate());
+}
 export function formatDate(date: Date, format: Project["dateFormat"]): string {
   const year = date.getFullYear(),
     month = date.getMonth() + 1,
     day = date.getDate();
   if (format === "western") return `${year}年${month}月${day}日`;
-  const era =
-    year >= 2019
-      ? `令和${year - 2018}`
-      : year >= 1989
-        ? `平成${year - 1988}`
-        : `西暦${year}`;
+  const parsed = parseDate(`${year}/${month}/${day}`);
+  const era = parsed?.era
+    ? `${parsed.era}${parsed.eraYear === 1 ? "元" : parsed.eraYear}`
+    : `西暦${year}`;
   return `${era}年${month}月${day}日${format === "japaneseWeekday" ? `（${"日月火水木金土"[date.getDay()]}）` : ""}`;
 }
 export function sheetToRows(

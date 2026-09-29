@@ -322,7 +322,22 @@ export function numberPart(value: string, part: NumberPart) {
 export const hasNumberWithText = (value: string) =>
   /[0-9０-９]/.test(value) && /[^0-9０-９\s]/.test(value);
 // 「○○小学校」を「○○」（校名）と「小学校」（種別）に分ける
-export const SCHOOL_PARTS = ["校名", "種別"] as const;
+export const SCHOOL_PARTS = ["校名", "種別", "種別略"] as const;
+// 種別の略称（小学校→小、中学校→中 など）
+const SCHOOL_ABBR: Record<string, string> = {
+  小学校: "小",
+  中学校: "中",
+  高等学校: "高",
+  高校: "高",
+  義務教育学校: "義",
+  中等教育学校: "中等",
+  特別支援学校: "特支",
+  高等専門学校: "高専",
+  幼稚園: "幼",
+  保育園: "保",
+  保育所: "保",
+  こども園: "こ",
+};
 export type SchoolPart = (typeof SCHOOL_PARTS)[number];
 const SCHOOL_SUFFIX =
   /(義務教育学校|中等教育学校|特別支援学校|高等専門学校|高等学校|小学校|中学校|高校|幼稚園|保育園|保育所|こども園|学校)\s*$/;
@@ -331,6 +346,7 @@ export function schoolPart(value: string, part: SchoolPart) {
   const v = value.trim();
   const m = SCHOOL_SUFFIX.exec(v);
   if (part === "種別") return m?.[1] ?? "";
+  if (part === "種別略") return m ? (SCHOOL_ABBR[m[1]] ?? "") : "";
   return m ? v.slice(0, m.index).trim() : v;
 }
 type FieldPart = DatePart | NumberPart | SchoolPart;

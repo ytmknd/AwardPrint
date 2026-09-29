@@ -96,6 +96,7 @@ describe("paper and merge data", () => {
     );
     expect(mergeText("{c:校名}|{c:種別}", row)).toBe("今治|特別支援学校");
     expect(mergeText("{d:校名}|{d:種別}", row)).toBe("西条教育委員会|");
+    expect(mergeText("{a:種別略}|{b:種別略}|{d:種別略}", row)).toBe("小|中|");
   });
   it("opens the sample as a fully placed A4 portrait certificate", () => {
     const project = sampleProject();
@@ -158,6 +159,29 @@ describe("data import", () => {
     const parsed = sheetToRows(sheets[0], 1, "japaneseWeekday");
     expect(parsed.rows[0].日付).toBe("令和8年3月15日（日）");
     expect(parsed.rows[0].学籍番号).toBe("0012");
+  });
+  it("reads Japanese-era formatted Excel dates instead of serial numbers", async () => {
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet("受賞者");
+    sheet.addRow(["日付", "数式", "年度初日", "数値"]);
+    const row = sheet.addRow([
+      46296,
+      { formula: "A2", result: 46296 },
+      43586,
+      46296,
+    ]);
+    row.getCell(1).numFmt = '[$-ja-JP]ggge"年"m"月"d"日"';
+    row.getCell(2).numFmt = "[$-411]ggge年m月d日";
+    row.getCell(3).numFmt = "yyyy/m/d";
+    const bytes = await workbook.xlsx.writeBuffer();
+    const sheets = await readWorkbook(new File([bytes], "era.xlsx"));
+    const parsed = sheetToRows(sheets[0], 1, "japanese");
+    expect(parsed.rows[0]).toEqual({
+      日付: "令和8年10月1日",
+      数式: "令和8年10月1日",
+      年度初日: "令和元年5月1日",
+      数値: "46296",
+    });
   });
 });
 
