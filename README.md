@@ -32,7 +32,7 @@ npm run test:e2e
 
 ## How to use
 
-1. The app opens with an A4 portrait sample layout for certificate paper that already has "school, grade, date" printed on it: school name and grade number, recipient name, era year / month / day as separate fields, and a placeholder signer name (`○○　○○`). Three sample recipients are loaded. Choose **新規** (New) to start with an empty layout.
+1. The app opens with an A4 portrait sample layout for certificate paper that already has "school, grade, date" printed on it: award name, school name and grade number, recipient name, era year / month / day as separate fields, and a placeholder signer name (`○○　○○`). Three sample recipients are loaded. Choose **新規** (New) to start with an empty layout.
 2. Choose **用紙設定** (Paper settings) to select A3, A4, A5, JIS B4, JIS B5, postcard, or a custom size in millimetres. Set orientation and printer X/Y offsets there.
 3. Choose **PDF下絵** (PDF template), or drop a PDF onto the editor. Select the template page and adjust its visibility and opacity. The app warns when the PDF size differs from the paper size.
    - If the design on the real certificate paper sits slightly off from the PDF template, use **下絵の位置調整** (template position) to move the template left/right/up/down in millimetres, so that you can place text against the paper as it really is. The arrow buttons move it by 0.1 mm (1 mm with Shift). This control appears in the right panel when no text box is selected, and in **用紙設定**. It moves only the template on screen and in the confirmation PDF; printed text does not move. To shift the printed text itself for a printer, use the print X/Y offsets in **用紙設定**.

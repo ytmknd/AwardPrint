@@ -134,6 +134,19 @@ describe("paper and merge data", () => {
           object.y + object.height <= 297,
       ),
     ).toBe(true);
+    expect(
+      project.objects.map(({ text, x, y }) => ({ text, x, y })),
+    ).toEqual([
+      { text: "{学校名:校名}{学校名:種別略}", x: 30.9, y: 110.9 },
+      { text: "{氏名} 殿", x: 43.5, y: 125.2 },
+      { text: "{日付:元号}{日付:年}", x: 44.4, y: 203.6 },
+      { text: "○○　○○", x: 77.7, y: 236.3 },
+      { text: "{学年:数字}", x: 139.7, y: 112.3 },
+      { text: "{日付:月}", x: 91.4, y: 205.2 },
+      { text: "{日付:日}", x: 106.8, y: 205.2 },
+      { text: "{賞名}", x: 55, y: 87.3 },
+    ]);
+    expect(project.background).toBeNull();
   });
   it("round trips the layout through JSON and excludes personal data by default", () => {
     const project = sampleProject();

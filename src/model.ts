@@ -183,12 +183,12 @@ export function sampleProject(): Project {
     version: 1,
     name: "サンプル賞状",
     paper: paperFromPreset("A4", "portrait"),
-    // 「学校名・学年・年月日」が印刷済みの賞状用紙に差し込む配置
+    // 指定のサンプルJSONに合わせた賞名・学校名・学年・氏名・年月日の配置
     objects: [
       {
         ...makeObject("{学校名:校名}{学校名:種別略}", "merge"),
         x: 30.9,
-        y: 113.7,
+        y: 110.9,
         width: 75.3,
         height: 12,
         fontSize: 18,
@@ -197,7 +197,7 @@ export function sampleProject(): Project {
       {
         ...makeObject("{氏名} 殿", "merge"),
         x: 43.5,
-        y: 128,
+        y: 125.2,
         width: 117.9,
         height: 16,
         fontSize: 27,
@@ -206,7 +206,7 @@ export function sampleProject(): Project {
       {
         ...makeObject("{日付:元号}{日付:年}", "merge"),
         x: 44.4,
-        y: 206.4,
+        y: 203.6,
         width: 39.8,
         height: 12,
         fontSize: 18,
@@ -215,15 +215,15 @@ export function sampleProject(): Project {
       {
         ...makeObject("○○　○○"),
         x: 77.7,
-        y: 239.1,
+        y: 236.3,
         width: 80,
         height: 15.6,
         fontSize: 32,
       },
       {
         ...makeObject("{学年:数字}", "merge"),
-        x: 137,
-        y: 115.1,
+        x: 139.7,
+        y: 112.3,
         width: 29.9,
         height: 9.6,
         fontSize: 18,
@@ -232,7 +232,7 @@ export function sampleProject(): Project {
       {
         ...makeObject("{日付:月}", "merge"),
         x: 91.4,
-        y: 208,
+        y: 205.2,
         width: 12.1,
         height: 8.9,
         fontSize: 18,
@@ -240,10 +240,18 @@ export function sampleProject(): Project {
       {
         ...makeObject("{日付:日}", "merge"),
         x: 106.8,
-        y: 208,
+        y: 205.2,
         width: 11.9,
         height: 8.9,
         fontSize: 18,
+      },
+      {
+        ...makeObject("{賞名}", "merge"),
+        x: 55,
+        y: 87.3,
+        width: 100,
+        height: 18,
+        fontSize: 32,
       },
     ],
     background: null,
