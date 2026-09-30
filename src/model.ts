@@ -19,7 +19,7 @@ export type TextObject = {
   fontSize: number;
   color: string;
   bold: boolean;
-  align: "left" | "center" | "right";
+  align: "left" | "center" | "right" | "justify";
   lineHeight: number;
   letterSpacing: number;
   vertical: boolean;

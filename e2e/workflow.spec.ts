@@ -25,6 +25,21 @@ test("sample layout, merge preview, paper settings and print PDF download", asyn
   );
 });
 
+test("distributes text evenly within its layout box", async ({ page }) => {
+  await page.goto("/");
+  const object = page.locator(".text-object").first();
+  await object.click();
+  await page.getByRole("button", { name: "均等配置" }).click();
+  await expect(object).toHaveCSS("text-align", "justify");
+  await expect(object).toHaveCSS("text-align-last", "justify");
+
+  const saved = page.waitForEvent("download");
+  await page.getByRole("button", { name: "レイアウト保存" }).click();
+  const jsonPath = await (await saved).path();
+  const projectJson = JSON.parse(await readFile(jsonPath, "utf-8"));
+  expect(projectJson.objects[0].align).toBe("justify");
+});
+
 test("background import, undo, save and restore layout", async ({ page }) => {
   await page.goto("/");
   const document = await PDFDocument.create();

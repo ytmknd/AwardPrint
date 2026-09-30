@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AlignCenter,
+  AlignJustify,
   AlignLeft,
   AlignRight,
   ArrowDown,
@@ -1564,7 +1565,14 @@ export default function App() {
                           fontSize: (o.fontSize * mmScale * 25.4) / 72,
                           color: o.color,
                           fontWeight: o.bold ? 700 : 400,
-                          textAlign: o.align,
+                          textAlign:
+                            o.align === "justify" ? "justify" : o.align,
+                          textAlignLast:
+                            o.align === "justify" ? "justify" : undefined,
+                          textJustify:
+                            o.align === "justify"
+                              ? "inter-character"
+                              : undefined,
                           lineHeight: o.lineHeight,
                           letterSpacing: `${o.letterSpacing * mmScale}px`,
                           writingMode: o.vertical
@@ -1886,13 +1894,22 @@ export default function App() {
                     </label>
                   </div>
                   <div className="segmented">
-                    {(["left", "center", "right"] as const).map((a, i) => (
+                    {(
+                      [
+                        ["left", "左寄せ", <AlignLeft />],
+                        ["center", "中央", <AlignCenter />],
+                        ["right", "右寄せ", <AlignRight />],
+                        ["justify", "均等配置", <AlignJustify />],
+                      ] as const
+                    ).map(([align, label, icon]) => (
                       <button
-                        key={a}
-                        className={shared.align === a ? "active" : ""}
-                        onClick={() => updateSelected({ align: a })}
+                        key={align}
+                        className={shared.align === align ? "active" : ""}
+                        onClick={() => updateSelected({ align })}
+                        title={label}
+                        aria-label={label}
                       >
-                        {[<AlignLeft />, <AlignCenter />, <AlignRight />][i]}
+                        {icon}
                       </button>
                     ))}
                   </div>

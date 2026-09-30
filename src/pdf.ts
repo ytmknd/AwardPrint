@@ -44,6 +44,18 @@ const splitLines = (
   }
   return out;
 };
+export function justifiedSpacing(
+  extent: number,
+  advances: number[],
+  minimum: number,
+): number {
+  if (advances.length < 2) return minimum;
+  return Math.max(
+    minimum,
+    (extent - advances.reduce((sum, advance) => sum + advance, 0)) /
+      (advances.length - 1),
+  );
+}
 function drawHorizontal(
   page: PDFPage,
   font: PDFFont,
@@ -69,16 +81,25 @@ function drawHorizontal(
     blockTop - i * step - (step - contentHeight) / 2 - ascent;
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
+    const chars = [...line];
+    const advances = chars.map((char) => font.widthOfTextAtSize(char, size));
+    const drawSpacing =
+      obj.align === "justify"
+        ? justifiedSpacing(width, advances, spacing)
+        : spacing;
     const measured =
-      font.widthOfTextAtSize(line, size) +
-      Math.max(0, line.length - 1) * spacing;
+      obj.align === "justify"
+        ? advances.reduce((sum, advance) => sum + advance, 0) +
+          Math.max(0, chars.length - 1) * drawSpacing
+        : font.widthOfTextAtSize(line, size) +
+          Math.max(0, chars.length - 1) * spacing;
     const dx =
       obj.align === "center"
         ? (width - measured) / 2
         : obj.align === "right"
           ? width - measured
           : 0;
-    if (spacing === 0)
+    if (drawSpacing === 0 && obj.align !== "justify")
       page.drawText(line, {
         x: x + dx,
         y: baseline(i),
@@ -89,7 +110,8 @@ function drawHorizontal(
       });
     else {
       let cursor = x + dx;
-      for (const char of line) {
+      for (let ci = 0; ci < chars.length; ci++) {
+        const char = chars[ci];
         page.drawText(char, {
           x: cursor,
           y: baseline(i),
@@ -98,7 +120,7 @@ function drawHorizontal(
           color: color(obj.color),
           rotate: degrees(obj.rotation),
         });
-        cursor += font.widthOfTextAtSize(char, size) + spacing;
+        cursor += advances[ci] + drawSpacing;
       }
     }
   }
@@ -139,21 +161,32 @@ function drawVertical(
       columns.push([]);
     if (char !== "\n") columns.at(-1)!.push(char);
   }
-  columns.forEach((chars, ci) =>
+  columns.forEach((chars, ci) => {
+    const drawSpacing =
+      obj.align === "justify"
+        ? justifiedSpacing(
+            height,
+            chars.map(() => size),
+            spacing,
+          )
+        : spacing;
     chars.forEach((char, ri) => {
       const glyph = VERTICAL_FORMS[char] ?? char;
       // Draw each glyph upright; rotate only glyphs that are conventionally sideways in vertical text.
       const sideways = /[A-Za-z0-9!?()\[\]]/.test(glyph);
       page.drawText(glyph, {
         x: x + width - (ci + 1) * advance,
-        y: top - (ri + 1) * (size + spacing),
+        y:
+          obj.align === "justify"
+            ? top - (ri + 1) * size - ri * drawSpacing
+            : top - (ri + 1) * (size + spacing),
         size,
         font,
         color: color(obj.color),
         rotate: degrees(sideways ? 90 + obj.rotation : obj.rotation),
       });
-    }),
-  );
+    });
+  });
   return columns.length * advance > width;
 }
 export type PdfProgress = (done: number, total: number) => void;

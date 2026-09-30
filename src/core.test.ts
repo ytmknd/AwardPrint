@@ -5,7 +5,7 @@ import ExcelJS from "exceljs";
 import JSZip from "jszip";
 import fontkit from "@pdf-lib/fontkit";
 import { inflateSync } from "node:zlib";
-import { createPdf } from "./pdf";
+import { createPdf, justifiedSpacing } from "./pdf";
 import {
   parseProjectJson,
   projectJson,
@@ -116,6 +116,11 @@ describe("paper and merge data", () => {
     // 同じずれ量で左右とも揃う場合は両方のガイドを出す
     expect(alignTo([10, 20, 30], [11, 31], 2)?.lines).toEqual([11, 31]);
     expect(alignTo([40], [0, 50], 2)).toBeNull();
+  });
+  it("distributes text evenly across its layout extent", () => {
+    expect(justifiedSpacing(100, [10, 20, 10], 2)).toBe(30);
+    expect(justifiedSpacing(100, [10], 2)).toBe(2);
+    expect(justifiedSpacing(30, [10, 10, 10], 2)).toBe(2);
   });
   it("opens the sample as a fully placed A4 portrait certificate", () => {
     const project = sampleProject();
