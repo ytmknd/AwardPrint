@@ -149,8 +149,14 @@ describe("paper and merge data", () => {
       { text: "{学年:数字}", x: 139.7, y: 112.3 },
       { text: "{日付:月}", x: 91.4, y: 205.2 },
       { text: "{日付:日}", x: 106.8, y: 205.2 },
-      { text: "{賞名}", x: 55, y: 87.3 },
+      { text: "{賞名}", x: 64.3, y: 87.3 },
     ]);
+    expect(project.objects.at(-1)).toMatchObject({
+      text: "{賞名}",
+      width: 75.4,
+      height: 18,
+      align: "justify",
+    });
     expect(project.background).toBeNull();
   });
   it("round trips the layout through JSON and excludes personal data by default", () => {
