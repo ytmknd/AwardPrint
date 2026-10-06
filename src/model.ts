@@ -188,7 +188,7 @@ export function sampleProject(): Project {
       {
         ...makeObject("{学校名:校名}{学校名:種別略}", "merge"),
         x: 30.3,
-        y: 115.6,
+        y: 114.7,
         width: 75.3,
         height: 12,
         fontSize: 18,
@@ -197,7 +197,7 @@ export function sampleProject(): Project {
       {
         ...makeObject("{氏名} 殿", "merge"),
         x: 43.5,
-        y: 129.2,
+        y: 128.2,
         width: 117.9,
         height: 16,
         fontSize: 27,
@@ -206,7 +206,7 @@ export function sampleProject(): Project {
       {
         ...makeObject("{日付:元号}{日付:年}", "merge"),
         x: 42.5,
-        y: 208.5,
+        y: 207.5,
         width: 39.8,
         height: 12,
         fontSize: 18,
@@ -215,7 +215,7 @@ export function sampleProject(): Project {
       {
         ...makeObject("○○　○○"),
         x: 77.7,
-        y: 240.1,
+        y: 238.8,
         width: 80,
         height: 15.6,
         fontSize: 32,
@@ -223,7 +223,7 @@ export function sampleProject(): Project {
       {
         ...makeObject("{学年:数字}", "merge"),
         x: 139.7,
-        y: 117,
+        y: 116.1,
         width: 29.9,
         height: 9.6,
         fontSize: 18,
@@ -232,7 +232,7 @@ export function sampleProject(): Project {
       {
         ...makeObject("{日付:月}", "merge"),
         x: 91.4,
-        y: 210.1,
+        y: 209.1,
         width: 12.1,
         height: 8.9,
         fontSize: 18,
@@ -240,7 +240,7 @@ export function sampleProject(): Project {
       {
         ...makeObject("{日付:日}", "merge"),
         x: 106.8,
-        y: 210.1,
+        y: 209.1,
         width: 11.9,
         height: 8.9,
         fontSize: 18,
@@ -248,7 +248,7 @@ export function sampleProject(): Project {
       {
         ...makeObject("{賞名}", "merge"),
         x: 64.3,
-        y: 91,
+        y: 90.1,
         width: 75.4,
         fontSize: 32,
         align: "justify",
